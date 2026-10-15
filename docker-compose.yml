@@ -1,0 +1,78 @@
+# FishMatrix 集中机编排：网关 + 中间件 + 注册中心（Docker Compose 一键拉起）
+# 说明：
+#   - 只引用预构建镜像（ghcr.io），不在本机 build —— 保证 `docker compose config` 离线可校验
+#   - 所有变量都有默认值，无 .env 文件也能直接启动（生产环境请复制 .env.example 为 .env 并修改）
+#   - 分散业务机（各成员电脑）的服务编排后续按需补充
+name: fishmatrix
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: fm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fishmatrix}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: fm-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: fm-es
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      TZ: Asia/Shanghai
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  nacos:
+    image: nacos/nacos-server:v2.5.1
+    container_name: fm-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      TZ: Asia/Shanghai
+    ports:
+      - "${NACOS_PORT:-8848}:8848"
+      - "9848:9848"
+
+  gateway:
+    image: ghcr.io/take-fish/tf-gateway:${TF_GATEWAY_TAG:-latest}
+    container_name: fm-gateway
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      TZ: Asia/Shanghai
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      redis:
+        condition: service_started
+
+volumes:
+  mysql-data:
+  redis-data:
+  es-data:

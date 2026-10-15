@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [test, master]
+  pull_request:
+    branches: [test, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate compose file
+        run: docker compose config -q
+
+      - name: Lint shell scripts
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          fi
+          if ls scripts/*.sh >/dev/null 2>&1; then
+            shellcheck -x scripts/*.sh
+          else
+            echo "没有 .sh 脚本，跳过 shellcheck"
+          fi
