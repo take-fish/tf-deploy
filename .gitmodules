@@ -1,0 +1,27 @@
+[submodule "tf-gateway"]
+	path = tf-gateway
+	url = git@github.com:take-fish/tf-gateway.git
+[submodule "tf-edge-node"]
+	path = tf-edge-node
+	url = git@github.com:take-fish/tf-edge-node.git
+[submodule "tf-user"]
+	path = tf-user
+	url = git@github.com:take-fish/tf-user.git
+[submodule "tf-chat"]
+	path = tf-chat
+	url = git@github.com:take-fish/tf-chat.git
+[submodule "tf-reader"]
+	path = tf-reader
+	url = git@github.com:take-fish/tf-reader.git
+[submodule "tf-game"]
+	path = tf-game
+	url = git@github.com:take-fish/tf-game.git
+[submodule "tf-music"]
+	path = tf-music
+	url = git@github.com:take-fish/tf-music.git
+[submodule "tf-agent"]
+	path = tf-agent
+	url = git@github.com:take-fish/tf-agent.git
+[submodule "tf-web"]
+	path = tf-web
+	url = git@github.com:take-fish/tf-web.git
