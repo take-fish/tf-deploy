@@ -59,7 +59,7 @@ python scripts/setup-branch-protection.py tf-web     # 单仓
 DRY_RUN=1 python scripts/setup-branch-protection.py  # 只预览
 ```
 
-脚本会：转 public（GitHub Free 私有仓不支持保护）→ 校正默认分支为 master → 读取真实 check 名 → 配置保护 → 设置 squash-only 合并 → 回读验证。
+脚本会：转 public（GitHub Free 私有仓不支持保护）→ 校正默认分支为 master → 校验约定的必过 check（默认 `build`，可用 `REQUIRED_CHECKS` 环境变量覆盖；接口读到 `release` 等只在 master 上运行的 check 会刻意忽略，否则 PR 会被永久卡住）→ 配置保护 → 设置 squash-only 合并 → 回读验证。
 
 ## 拉取私有镜像 / 制品
 

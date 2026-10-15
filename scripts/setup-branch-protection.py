@@ -25,6 +25,13 @@ import sys
 import urllib.error
 import urllib.request
 
+# Windows 控制台默认 GBK，强制 UTF-8 输出（含中文与符号），避免打印崩溃
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 OWNER = os.environ.get("OWNER", "take-fish")
 BRANCH = os.environ.get("BRANCH", "master")
 DRY_RUN = os.environ.get("DRY_RUN") == "1"
@@ -55,6 +62,10 @@ def get_pat() -> str:
 
 PAT = get_pat()
 
+# Windows 上 urllib 默认会读取系统代理设置（如 Clash 未运行时请求会一直挂起），
+# 这里显式禁用代理，走直连（git/curl 均能直连访问 GitHub）。
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 def request(method: str, path: str, payload=None):
     url = path if path.startswith("http") else API + path
@@ -66,7 +77,7 @@ def request(method: str, path: str, payload=None):
     if data:
         req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with OPENER.open(req, timeout=30) as resp:
             body = resp.read().decode()
             return resp.status, (json.loads(body) if body else {})
     except urllib.error.HTTPError as e:
@@ -111,56 +122,88 @@ def setup_repo(repo: str) -> bool:
                 return False
             print(f"   ✓ 默认分支已改为 {BRANCH}")
 
-    # 2. 发现 master 上真实存在的 check 名（不能凭空写，否则 PR 会永久 pending）
+    # 2. 确定 required check 名单：以约定为准（默认 build），接口发现仅作校验。
+    #    注意：不能把发现到的全部 check 都设为必过 —— 例如 release 只在 master 上运行，
+    #    若设为必过，PR 上永远不会上报，会永久卡住合并。
+    names = [n.strip() for n in os.environ.get("REQUIRED_CHECKS", "build").split(",") if n.strip()]
     st, runs = request("GET", f"/repos/{OWNER}/{repo}/commits/{BRANCH}/check-runs?per_page=100")
-    if st != 200:
-        print(f"   ✗ 查询 check-runs 失败 HTTP {st}: {runs.get('message')}")
-        return False
-    names = sorted({
-        c["name"] for c in runs.get("check_runs", [])
-        if (c.get("app") or {}).get("slug") == "github-actions"
-    })
-    if not names:
-        print(f"   ✗ {BRANCH} 上还没有 GitHub Actions 的 check —— 请先让 CI 在该分支跑过一次再执行本脚本")
-        return False
-    print(f"   发现 check：{', '.join(names)}")
-
-    # 3. 配置分支保护（REST 不接受 0 个 approve，PR 要求部分用 GraphQL 兜底）
-    payload = {
-        "required_status_checks": {
-            "strict": True,
-            "checks": [{"context": n, "app_id": ACTIONS_APP_ID} for n in names],
-        },
-        "enforce_admins": repo not in ENFORCE_ADMINS_EXCEPTIONS,
-        "restrictions": None,
-        "allow_force_pushes": False,
-        "allow_deletions": False,
-    }
-    if DRY_RUN:
-        print("   [dry-run] 保护 payload：", json.dumps(payload, ensure_ascii=False))
-    else:
-        st, resp = request("PUT", f"/repos/{OWNER}/{repo}/branches/{BRANCH}/protection", payload)
-        if st != 200:
-            msg = json.dumps(resp, ensure_ascii=False)
-            if "Upgrade to GitHub Pro" in msg:
-                print("   ✗ 403：GitHub Free 的私有仓库不支持分支保护，请先转 public 或升级 Pro")
-            else:
-                print(f"   ✗ 保护配置失败 HTTP {st}: {msg}")
+    if st == 200:
+        discovered = sorted({
+            c["name"] for c in runs.get("check_runs", [])
+            if (c.get("app") or {}).get("slug") == "github-actions"
+        })
+        missing = [n for n in names if n not in discovered]
+        if missing:
+            print(f"   ✗ {BRANCH} 上未发现约定的 check：{', '.join(missing)}"
+                  f"（现有：{', '.join(discovered) or '无'}）—— 请先让 CI 在该分支跑过一次")
             return False
-        print("   ✓ 基础保护已配置（required checks / 禁强推 / 禁删除）")
+        others = [n for n in discovered if n not in names]
+        print(f"   ✓ 已确认必过 check：{', '.join(names)}"
+              + (f"（忽略：{', '.join(others)}）" if others else ""))
+    else:
+        # PAT 可能缺少 Checks 读取权限；按约定直接使用
+        print(f"   ⚠ 无法读取 check 列表（HTTP {st}: {runs.get('message')}），按约定使用：{', '.join(names)}")
 
-        # "必须走 PR、0 个 approve" —— REST 传 0 会 422，用 GraphQL 表达
+    # 3. 配置分支保护。目标形态："必须走 PR、0 个 approve"。
+    #    REST 的 required_pull_request_reviews 字段必须显式提供；若 REST 不接受 0，
+    #    先用 1 建立规则，再用 GraphQL 把 approve 数降为 0。
+    def protection_payload(review_count):
+        return {
+            "required_status_checks": {
+                "strict": True,
+                "checks": [{"context": n, "app_id": ACTIONS_APP_ID} for n in names],
+            },
+            "enforce_admins": repo not in ENFORCE_ADMINS_EXCEPTIONS,
+            "required_pull_request_reviews": {
+                "dismiss_stale_reviews": False,
+                "require_code_owner_reviews": False,
+                "required_approving_review_count": review_count,
+            },
+            "restrictions": None,
+            "allow_force_pushes": False,
+            "allow_deletions": False,
+        }
+
+    def set_approvals_to_zero():
+        """GraphQL 把 approve 数设为 0（REST 不接受 0 时的兜底）。"""
         node_id = info.get("node_id")
         query = (
             'mutation { updateBranchProtectionRule(input: { repositoryId: "%s", pattern: "%s",'
             " requiresApprovingReviews: true, requiredApprovingReviewCount: 0 }) { clientMutationId } }"
             % (node_id, BRANCH)
         )
-        st, resp = request("POST", GRAPHQL, {"query": query})
-        if st == 200 and not resp.get("errors"):
-            print("   ✓ 已要求必须通过 PR 合并（0 个 approve）")
+        st2, resp2 = request("POST", GRAPHQL, {"query": query})
+        if st2 == 200 and not resp2.get("errors"):
+            print("   ✓ 已要求必须通过 PR 合并（0 个 approve，GraphQL 设置）")
+            return True
+        print(f"   ✗ 设置 PR 门禁为 0 approve 失败：{json.dumps(resp2, ensure_ascii=False)[:300]}")
+        return False
+
+    if DRY_RUN:
+        print("   [dry-run] 保护 payload：", json.dumps(protection_payload(0), ensure_ascii=False))
+    else:
+        st, resp = request("PUT", f"/repos/{OWNER}/{repo}/branches/{BRANCH}/protection",
+                           protection_payload(0))
+        if st == 200:
+            print("   ✓ 分支保护已配置（必走 PR、0 approve、build 必过、禁强推/禁删除）")
+        elif st == 422:
+            # REST 不接受 0 个 approve：先以 1 建立规则，再降为 0
+            st, resp = request("PUT", f"/repos/{OWNER}/{repo}/branches/{BRANCH}/protection",
+                               protection_payload(1))
+            if st != 200:
+                print(f"   ✗ 保护配置失败 HTTP {st}: {json.dumps(resp, ensure_ascii=False)[:300]}")
+                return False
+            print("   · REST 不接受 0 个 approve，改用 GraphQL 兜底…")
+            if not set_approvals_to_zero():
+                return False
         else:
-            print(f"   ✗ 设置 PR 门禁失败：{json.dumps(resp, ensure_ascii=False)[:300]}")
+            msg = json.dumps(resp, ensure_ascii=False)
+            if "Repository has been locked" in msg:
+                print("   ✗ 仓库刚转 public，GitHub 短暂锁定中（通常几分钟内解除）—— 稍后重跑本脚本即可")
+            elif "Upgrade to GitHub Pro" in msg:
+                print("   ✗ 403：GitHub Free 的私有仓库不支持分支保护，请先转 public 或升级 Pro")
+            else:
+                print(f"   ✗ 保护配置失败 HTTP {st}: {msg}")
             return False
 
     # 4. 合并方式：仅 squash、合并后自动删分支
@@ -187,13 +230,14 @@ def setup_repo(repo: str) -> bool:
             return False
         rsc = prot.get("required_status_checks") or {}
         contexts = [c.get("context") for c in (rsc.get("checks") or [])] or (rsc.get("contexts") or [])
+        rpr = prot.get("required_pull_request_reviews") or {}
         print(
             "   保护验证："
             f"checks={contexts}, strict={rsc.get('strict')}, "
             f"enforce_admins={(prot.get('enforce_admins') or {}).get('enabled')}, "
             f"force_push={(prot.get('allow_force_pushes') or {}).get('enabled')}, "
             f"deletions={(prot.get('allow_deletions') or {}).get('enabled')}, "
-            f"pr_required={'required_pull_request_reviews' in prot}"
+            f"pr_required={bool(rpr)}, approvals_required={rpr.get('required_approving_review_count')}"
         )
     return True
 
