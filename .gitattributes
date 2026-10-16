@@ -1,0 +1,3 @@
+# 统一行尾为 LF：本仓库在 Windows 上开发、在 Linux（集中机）部署，
+# 脚本 / systemd 单元混入 CRLF 会导致无法执行
+* text=auto eol=lf

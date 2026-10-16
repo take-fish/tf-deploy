@@ -1,0 +1,14 @@
+# FishMatrix 自动更新定时器：每 2 分钟触发一次（开机 2 分钟后开始）
+[Unit]
+Description=周期触发 FishMatrix 应用服务自动更新
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=30s
+Unit=fm-auto-update.service
+
+[Install]
+WantedBy=timers.target
