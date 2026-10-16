@@ -25,3 +25,6 @@
 [submodule "tf-web"]
 	path = tf-web
 	url = git@github.com:take-fish/tf-web.git
+[submodule "tf-console"]
+	path = tf-console
+	url = git@github.com:take-fish/tf-console.git
