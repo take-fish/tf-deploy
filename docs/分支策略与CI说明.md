@@ -18,7 +18,7 @@ feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可
 
 **例外**：`tf-deploy` 的 master 允许管理员直推（`enforce_admins=false`），供各服务仓发版后自动 bump submodule 指针。
 
-## CI 触发规则（10 个仓库统一）
+## CI 触发规则（11 个仓库统一）
 
 | 事件 | 是否触发 CI |
 |------|-------------|
@@ -30,7 +30,7 @@ feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可
 - job 名统一为 **`build`**：分支保护里的 required check 就是它。将来拆分更多 job 时，请保留一个同名聚合 job，否则保护会失效。
 - 所有工作流固定 `runs-on: ubuntu-24.04`（避免 `ubuntu-latest` 镜像迁移期波动）。
 
-## 发版流程（9 个代码仓，tf-deploy 除外）
+## 发版流程（10 个代码仓，tf-deploy 除外）
 
 合并到 `master` → 自动触发 Release 工作流：
 
@@ -41,7 +41,7 @@ feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可
 
 | 仓库 | Release 附件 | Docker 镜像 |
 |------|-------------|-------------|
-| tf-gateway / tf-edge-node | linux/amd64、linux/arm64、windows/amd64 裸二进制 + SHA256SUMS | ✅ linux/amd64 |
+| tf-gateway / tf-edge-node / tf-console | linux/amd64、linux/arm64、windows/amd64 裸二进制 + SHA256SUMS | ✅ linux/amd64 |
 | tf-user / tf-chat / tf-reader / tf-game / tf-music | `<仓库>-vX.Y.Z.jar` + SHA256SUMS | ✅ |
 | tf-agent | 无（仅 Release 说明） | ✅ |
 | tf-web | `<仓库>-vX.Y.Z-dist.tar.gz` + SHA256SUMS | 无 |
@@ -52,7 +52,7 @@ feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可
 
 ```bash
 # 1. 创建 PAT（二选一）：
-#    - fine-grained：Administration: RW + Contents: RW，限定 take-fish 的 10 个仓库
+#    - fine-grained：Administration: RW + Contents: RW，限定 take-fish 的 11 个仓库
 #    - classic：勾选 repo
 # 2. 把 PAT 写入 ~/.fishmatrix-pat（或设 GH_PAT 环境变量）
 # 3. 确认 master 上 CI 已跑过一次（必须有 build check），然后执行：
