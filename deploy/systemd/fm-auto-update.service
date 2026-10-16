@@ -1,0 +1,13 @@
+# FishMatrix 应用服务自动更新（由 fm-auto-update.timer 周期触发）
+# 安装：sudo bash scripts/install-auto-update.sh（会把 @REPO_DIR@ 替换为实际仓库路径）
+[Unit]
+Description=FishMatrix 应用服务自动更新（轮询 ghcr 并重建）
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO_DIR@
+ExecStart=/bin/bash @REPO_DIR@/scripts/auto-update.sh
+# 首次拉取镜像可能较慢，放宽超时
+TimeoutStartSec=300
