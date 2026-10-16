@@ -3,15 +3,17 @@
 ## 分支模型
 
 ```
-feature/xxx ──PR──▶ test ──PR──▶ master ──自动发版──▶ tag vX.Y.Z + Release + ghcr 镜像
-   开发中          联调环境            稳定/发布线
-                （可直接 push）      （保护：必走 PR + CI 必过）
+feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可直接 push）
+     │
+     └────PR（build 必过）────▶ master（发布线：保护）──自动发版──▶ tag vX.Y.Z + Release + ghcr 镜像
 ```
+
+**开发流**：`feature/*` 开发完成 → 直接合入 `test` 联调（不走 PR）→ 验证 OK 后，从**开发分支**开 PR 合 `master`（不从 test 提 PR）→ 合并后自动发版。
 
 | 分支 | 角色 | 保护规则 |
 |------|------|----------|
-| `master` | 默认分支、发布线 | 禁止直接 push；必须通过 PR 合并；PR 的 `build` 检查必须通过；禁止强推/删除；合并方式仅 squash；合并后自动删源分支 |
-| `test` | 联调分支 | 无保护，可直接 push（CI 仍会运行） |
+| `master` | 默认分支、发布线 | 禁止直接 push；必须通过 PR 合并（PR 来源为 `feature/*`）；PR 的 `build` 检查必须通过；禁止强推/删除；合并方式仅 squash；合并后自动删源分支 |
+| `test` | 联调分支 | 无保护；开发分支直接合入（不走 PR）；可直接 push（CI 仍会运行） |
 | `feature/*` | 开发分支 | 无（push 不触发 CI，开 PR 时才跑，节省用量） |
 
 **例外**：`tf-deploy` 的 master 允许管理员直推（`enforce_admins=false`），供各服务仓发版后自动 bump submodule 指针。
