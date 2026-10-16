@@ -2,13 +2,13 @@
 """FishMatrix GitHub 仓库治理脚本：转 public + 配置 master 分支保护 + 仓库合并设置。
 
 用法：
-    python scripts/setup-branch-protection.py                 # 处理全部 10 个仓库
+    python scripts/setup-branch-protection.py                 # 处理全部 11 个仓库
     python scripts/setup-branch-protection.py tf-gateway      # 只处理指定仓库
     DRY_RUN=1 python scripts/setup-branch-protection.py       # 只打印将要做的修改
     PUBLICIZE=0 python scripts/setup-branch-protection.py     # 跳过"转 public"步骤
 
 PAT 要求（二选一）：
-    - fine-grained token：Administration: Read and write + Contents: Read and write（限定 10 个仓库）
+    - fine-grained token：Administration: Read and write + Contents: Read and write（限定 11 个仓库）
     - classic token：repo 范围
 
 PAT 提供方式（任选其一）：
@@ -43,7 +43,7 @@ ACTIONS_APP_ID = 15368  # GitHub Actions 的 app_id，锁定 required check 必�
 REPOS = [
     "tf-gateway", "tf-edge-node",
     "tf-user", "tf-chat", "tf-reader", "tf-game", "tf-music",
-    "tf-agent", "tf-web", "tf-deploy",
+    "tf-agent", "tf-web", "tf-console", "tf-deploy",
 ]
 # tf-deploy 例外：允许管理员绕过保护直推 master（供各仓发版后自动 bump submodule 指针）
 ENFORCE_ADMINS_EXCEPTIONS = {"tf-deploy"}

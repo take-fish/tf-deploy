@@ -14,7 +14,7 @@ REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_DIR"
 
 # 需要自动更新的应用服务；新的业务服务编排进 compose 后，把服务名追加到这里即可
-APP_SERVICES=(gateway)
+APP_SERVICES=(gateway console)
 
 log() { echo "[fm-auto-update] $(date '+%F %T') $*"; }
 
