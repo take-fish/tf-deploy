@@ -1,0 +1,68 @@
+# FishMatrix 业务服务编排（分机层）
+#
+# 用法：
+#   集中机本地验证：docker compose -f docker-compose.services.yml up -d
+#   分机部署：复制本文件到分机，设置环境变量后按需拉起个别服务（例：docker compose -f docker-compose.services.yml up -d chat）
+#
+# 说明：
+#   - 与公共层（docker-compose.yml）共用 project name，容器间可按服务名互访
+#   - 中间件地址默认走 host.docker.internal（容器内访问宿主机已发布端口）；
+#     分机侧请用环境变量覆盖为集中机地址：
+#       set MYSQL_HOST=10.28.25.234
+#       set REDIS_HOST=10.28.25.234
+#       set NACOS_ADDR=10.28.25.234:8848
+#   - 密码变量：MYSQL_APP_PASSWORD / NACOS_ADMIN_PASSWORD（见集中机 .env）
+name: fishmatrix
+
+x-service-env: &service-env
+  TZ: Asia/Shanghai
+  MYSQL_HOST: ${MYSQL_HOST:-host.docker.internal}
+  MYSQL_PORT: "3306"
+  MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
+  MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
+  REDIS_HOST: ${REDIS_HOST:-host.docker.internal}
+  REDIS_PORT: "6379"
+  NACOS_ADDR: ${NACOS_ADDR:-host.docker.internal:8848}
+  NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+  NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
+
+services:
+  user:
+    image: ghcr.io/take-fish/tf-user:${TF_USER_TAG:-latest}
+    container_name: fm-user
+    restart: unless-stopped
+    environment: *service-env
+    ports:
+      - "${USER_PORT:-8101}:8101"
+
+  chat:
+    image: ghcr.io/take-fish/tf-chat:${TF_CHAT_TAG:-latest}
+    container_name: fm-chat
+    restart: unless-stopped
+    environment: *service-env
+    ports:
+      - "${CHAT_PORT:-8102}:8102"
+
+  reader:
+    image: ghcr.io/take-fish/tf-reader:${TF_READER_TAG:-latest}
+    container_name: fm-reader
+    restart: unless-stopped
+    environment: *service-env
+    ports:
+      - "${READER_PORT:-8103}:8103"
+
+  game:
+    image: ghcr.io/take-fish/tf-game:${TF_GAME_TAG:-latest}
+    container_name: fm-game
+    restart: unless-stopped
+    environment: *service-env
+    ports:
+      - "${GAME_PORT:-8104}:8104"
+
+  music:
+    image: ghcr.io/take-fish/tf-music:${TF_MUSIC_TAG:-latest}
+    container_name: fm-music
+    restart: unless-stopped
+    environment: *service-env
+    ports:
+      - "${MUSIC_PORT:-8105}:8105"
