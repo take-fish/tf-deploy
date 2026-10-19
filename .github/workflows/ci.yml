@@ -20,8 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate compose file
-        run: docker compose config -q
+      - name: Validate compose files
+        run: docker compose -f docker-compose.yml -f docker-compose.services.yml config -q
 
       - name: Lint shell scripts
         run: |

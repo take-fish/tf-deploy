@@ -5,26 +5,27 @@
 #   分机部署：复制本文件到分机，设置环境变量后按需拉起个别服务（例：docker compose -f docker-compose.services.yml up -d chat）
 #
 # 说明：
-#   - 与公共层（docker-compose.yml）共用 project name，容器间可按服务名互访
-#   - 中间件地址默认走 host.docker.internal（容器内访问宿主机已发布端口）；
-#     分机侧请用环境变量覆盖为集中机地址：
-#       set MYSQL_HOST=10.28.25.234
-#       set REDIS_HOST=10.28.25.234
-#       set NACOS_ADDR=10.28.25.234:8848
+#   - 与公共层（docker-compose.yml）共用 project name/network，按 compose 服务名互访
+#   - 集中机全栈运行：中间件默认使用 compose 服务名 mysql / redis / nacos
+#   - 分机部署：用环境变量覆盖为集中机地址，例如：
+#       export MYSQL_HOST=10.28.25.234
+#       export REDIS_HOST=10.28.25.234
+#       export NACOS_ADDR=10.28.25.234:8848
 #   - 密码变量：MYSQL_APP_PASSWORD / NACOS_ADMIN_PASSWORD（见集中机 .env）
 name: fishmatrix
 
 x-service-env: &service-env
   TZ: Asia/Shanghai
-  MYSQL_HOST: ${MYSQL_HOST:-host.docker.internal}
+  MYSQL_HOST: ${MYSQL_HOST:-mysql}
   MYSQL_PORT: "3306"
   MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
   MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
-  REDIS_HOST: ${REDIS_HOST:-host.docker.internal}
+  REDIS_HOST: ${REDIS_HOST:-redis}
   REDIS_PORT: "6379"
-  NACOS_ADDR: ${NACOS_ADDR:-host.docker.internal:8848}
+  NACOS_ADDR: ${NACOS_ADDR:-nacos:8848}
   NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
   NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
+  SQL_INIT_MODE: ${SQL_INIT_MODE:-always}
 
 services:
   user:

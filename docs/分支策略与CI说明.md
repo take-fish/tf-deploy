@@ -29,6 +29,7 @@ feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可
 
 - job 名统一为 **`build`**：分支保护里的 required check 就是它。将来拆分更多 job 时，请保留一个同名聚合 job，否则保护会失效。
 - 所有工作流固定 `runs-on: ubuntu-24.04`（避免 `ubuntu-latest` 镜像迁移期波动）。
+- `tf-deploy` 的 CI 会同时校验 `docker-compose.yml` 与 `docker-compose.services.yml` 合并后的配置，并对全部 `scripts/*.sh` 执行 shellcheck。
 
 ## 发版流程（10 个代码仓，tf-deploy 除外）
 
@@ -44,7 +45,7 @@ feature/xxx ──直接合入（不走 PR）──▶ test（联调环境，可
 | tf-gateway / tf-edge-node / tf-console | linux/amd64、linux/arm64、windows/amd64 裸二进制 + SHA256SUMS | ✅ linux/amd64 |
 | tf-user / tf-chat / tf-reader / tf-game / tf-music | `<仓库>-vX.Y.Z.jar` + SHA256SUMS | ✅ |
 | tf-agent | 无（仅 Release 说明） | ✅ |
-| tf-web | `<仓库>-vX.Y.Z-dist.tar.gz` + SHA256SUMS | 无 |
+| tf-web | `<仓库>-vX.Y.Z-dist.tar.gz` + SHA256SUMS | ✅（nginx 静态镜像） |
 
 需要发布给成员机器时，`tf-edge-node` 的 Windows 二进制可直接下载分发。
 

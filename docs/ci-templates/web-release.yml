@@ -1,5 +1,5 @@
 # Web 前端发版模板（复制到新仓库时：把 __APP__ 全部替换为仓库名，如 tf-web）
-# 制品为 dist 压缩包；暂无 Docker 镜像
+# 制品为 dist 压缩包 + nginx 镜像（ghcr）
 name: Release
 
 on:
@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: release
@@ -20,6 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       APP: __APP__
+      IMAGE: ghcr.io/take-fish/__APP__
       TF_DEPLOY_PAT: ${{ secrets.TF_DEPLOY_PAT }}
     steps:
       - uses: actions/checkout@v6
@@ -59,6 +61,31 @@ jobs:
           mkdir -p dist-release
           tar -czf "dist-release/${APP}-${VERSION}-dist.tar.gz" -C dist .
           (cd dist-release && sha256sum ./* > SHA256SUMS && ls -lh)
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push nginx image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
