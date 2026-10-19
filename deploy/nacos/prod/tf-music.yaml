@@ -1,0 +1,12 @@
+# FishMatrix 生产配置 · Nacos namespace=fm-prod · dataId=tf-music.yaml · group=FM
+# 由 scripts/init-nacos.sh 发布；修改后可重跑脚本覆盖。
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:fm_music}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_APP_USER:fm_app}
+    password: ${MYSQL_APP_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}

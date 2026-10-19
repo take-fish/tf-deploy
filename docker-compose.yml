@@ -56,9 +56,17 @@ services:
     environment:
       MODE: standalone
       TZ: Asia/Shanghai
+      # 鉴权默认关闭；第 4 步在 .env 中置 NACOS_AUTH_ENABLE=true 后重建生效
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-}
     ports:
       - "${NACOS_PORT:-8848}:8848"
       - "9848:9848"
+    volumes:
+      # namespace 与配置持久化（standalone 内嵌 Derby）
+      - nacos-data:/home/nacos/data
 
   gateway:
     image: ghcr.io/take-fish/tf-gateway:${TF_GATEWAY_TAG:-latest}
@@ -105,3 +113,4 @@ volumes:
   mysql-data:
   redis-data:
   es-data:
+  nacos-data:

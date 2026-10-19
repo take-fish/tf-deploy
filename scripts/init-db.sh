@@ -2,9 +2,10 @@
 # FishMatrix 集中机数据库初始化（幂等）
 #
 # 作用：
-#   - 创建 fm_user / fm_chat / fm_reader / fm_game / fm_music
+#   - 创建生产库 fm_user / fm_chat / fm_reader / fm_game / fm_music
+#   - 创建测试库 fm_test_user / fm_test_chat / fm_test_reader / fm_test_game / fm_test_music
 #   - 创建/同步 fm_app 账号密码（与 .env 保持一致）
-#   - 授予 fm_app 对 fm_* 库的 DDL/DML 权限（tf-reader 启动时自动建表）
+#   - 授予 fm_app 对 fm_* / fm_test_* 库的 DDL/DML 权限（tf-reader 启动时自动建表）
 #
 # 用法：bash scripts/init-db.sh
 # 前置：docker compose up -d mysql 且容器 healthy
@@ -62,9 +63,16 @@ CREATE DATABASE IF NOT EXISTS fm_reader CHARACTER SET utf8mb4 COLLATE utf8mb4_un
 CREATE DATABASE IF NOT EXISTS fm_game CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS fm_music CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+CREATE DATABASE IF NOT EXISTS fm_test_user CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS fm_test_chat CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS fm_test_reader CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS fm_test_game CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS fm_test_music CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'%' IDENTIFIED BY '${MYSQL_APP_PASSWORD}';
 ALTER USER '${MYSQL_APP_USER}'@'%' IDENTIFIED BY '${MYSQL_APP_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`fm\_%\`.* TO '${MYSQL_APP_USER}'@'%';
+GRANT ALL PRIVILEGES ON \`fm\_test\_%\`.* TO '${MYSQL_APP_USER}'@'%';
 FLUSH PRIVILEGES;
 SQL
 
