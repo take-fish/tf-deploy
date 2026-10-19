@@ -73,10 +73,20 @@ CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'%' IDENTIFIED BY '${MYSQL_APP_PAS
 ALTER USER '${MYSQL_APP_USER}'@'%' IDENTIFIED BY '${MYSQL_APP_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`fm\_%\`.* TO '${MYSQL_APP_USER}'@'%';
 GRANT ALL PRIVILEGES ON \`fm\_test\_%\`.* TO '${MYSQL_APP_USER}'@'%';
+
+-- 备用通道：若测试栈改用 host.docker.internal 访问共享 MySQL，经 Docker Desktop
+-- 端口转发后 MySQL 看到的来源是 localhost，因此保留同名 localhost 账号（仅授权测试库）。
+CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'localhost' IDENTIFIED BY '${MYSQL_APP_PASSWORD}';
+ALTER USER '${MYSQL_APP_USER}'@'localhost' IDENTIFIED BY '${MYSQL_APP_PASSWORD}';
+GRANT ALL PRIVILEGES ON \`fm\_test\_%\`.* TO '${MYSQL_APP_USER}'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
 echo "完成。当前授权："
 docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" fm-mysql \
-  mysql -uroot -N -e "SHOW GRANTS FOR '${MYSQL_APP_USER}'@'%';"
+  mysql -uroot -N -e "SHOW GRANTS FOR '${MYSQL_APP_USER}'@'%'; SHOW GRANTS FOR '${MYSQL_APP_USER}'@'localhost';"
+
+echo "验证 ${MYSQL_APP_USER} 账号可通过 TCP 登录..."
+docker exec -e MYSQL_PWD="$MYSQL_APP_PASSWORD" fm-mysql \
+  mysql -h 127.0.0.1 -u"${MYSQL_APP_USER}" -N -e "SELECT 'AUTH_OK';"
 echo "提示：tf-reader 首次启动会自动执行 schema.sql / data.sql 建表并写入演示数据。"

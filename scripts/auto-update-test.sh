@@ -30,9 +30,15 @@ if [ -z "$(docker compose "${COMPOSE_FILES[@]}" ps -q 2>/dev/null | tr -d '[:spa
   exit 0
 fi
 
+# 中间件容器被重建后需要重新接入测试网络
+bash "$REPO_DIR/scripts/connect-test-network.sh" >/dev/null
+
 log "轮询测试镜像：${APP_SERVICES[*]}"
-if ! docker compose "${COMPOSE_FILES[@]}" pull -q "${APP_SERVICES[@]}"; then
-  log "ERROR: 测试镜像拉取失败——检查 ghcr 凭据与 :test 镜像是否已构建"
+# ghcr 层下载在部分网络下极慢（实测约 20 KB/s），必须设置超时避免永久占用锁
+PULL_TIMEOUT="${TEST_PULL_TIMEOUT:-180}"
+if ! timeout "$PULL_TIMEOUT" docker compose "${COMPOSE_FILES[@]}" pull -q "${APP_SERVICES[@]}"; then
+  log "ERROR: 测试镜像拉取失败或超时（${PULL_TIMEOUT}s）——检查 ghcr 凭据/网络；"
+  log "       可改用本地构建部署：bash scripts/build-test-local.sh user chat reader game music"
   exit 1
 fi
 

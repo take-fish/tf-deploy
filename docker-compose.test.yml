@@ -6,22 +6,22 @@
 #   bash scripts/auto-update-test.sh        # 拉取 :test 镜像并重建
 #
 # 隔离方式：
-#   - 独立 project/network（fishmatrix-test），不与生产容器混网
-#   - 中间件复用集中机实例，容器内通过 host.docker.internal 访问已发布端口
+#   - 独立 project/network（fishmatrix-test），不与生产业务容器混网
+#   - 中间件复用集中机实例：通过专用网络 fishmatrix-test-mw 连接（脚本 connect-test-network.sh）
 #   - MySQL：fm_test_* 库 / Redis：DB1 / Nacos：namespace fm-test
 #   - 镜像：ghcr.io/take-fish/tf-*:test（push test 分支由 CI 构建）
 name: fishmatrix-test
 
-# 共享中间件连接（集中机已发布 3306/6379/8848）
+# 共享中间件连接（容器名由 fishmatrix-test-mw 网络解析）
 x-test-middleware: &test-middleware
-  MYSQL_HOST: "${TEST_MIDDLEWARE_HOST:-host.docker.internal}"
+  MYSQL_HOST: "${TEST_MYSQL_HOST:-fm-mysql}"
   MYSQL_PORT: "3306"
   MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
   MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
-  REDIS_HOST: "${TEST_MIDDLEWARE_HOST:-host.docker.internal}"
+  REDIS_HOST: "${TEST_REDIS_HOST:-fm-redis}"
   REDIS_PORT: "6379"
   REDIS_DATABASE: "1"
-  NACOS_ADDR: "${TEST_MIDDLEWARE_HOST:-host.docker.internal}:8848"
+  NACOS_ADDR: "${TEST_NACOS_ADDR:-fm-nacos:8848}"
   NACOS_NAMESPACE: fm-test
   NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
   NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
@@ -73,6 +73,9 @@ services:
       <<: *test-service-env
       MYSQL_DB: fm_test_user
     extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
     ports:
       - "${TEST_USER_PORT:-18101}:8101"
 
@@ -84,6 +87,9 @@ services:
       <<: *test-service-env
       MYSQL_DB: fm_test_chat
     extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
     ports:
       - "${TEST_CHAT_PORT:-18102}:8102"
 
@@ -95,6 +101,9 @@ services:
       <<: *test-service-env
       MYSQL_DB: fm_test_reader
     extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
     ports:
       - "${TEST_READER_PORT:-18103}:8103"
 
@@ -106,6 +115,9 @@ services:
       <<: *test-service-env
       MYSQL_DB: fm_test_game
     extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
     ports:
       - "${TEST_GAME_PORT:-18104}:8104"
 
@@ -117,5 +129,14 @@ services:
       <<: *test-service-env
       MYSQL_DB: fm_test_music
     extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
     ports:
       - "${TEST_MUSIC_PORT:-18105}:8105"
+
+networks:
+  default:
+  shared-mw:
+    external: true
+    name: ${TEST_MW_NETWORK:-fishmatrix-test-mw}

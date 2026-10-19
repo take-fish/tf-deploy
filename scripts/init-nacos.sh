@@ -78,7 +78,8 @@ create_namespace() {
     --data-urlencode "customNamespaceId=${ns}" \
     --data-urlencode "namespaceName=${ns}" \
     --data-urlencode "namespaceDesc=${desc}")
-  if ! printf '%s' "$result" | grep -q '"code":200'; then
+  # v1 接口成功返回字面量 true；部分版本返回 {"code":200}
+  if [ "$result" != "true" ] && ! printf '%s' "$result" | grep -q '"code":200'; then
     echo "[init-nacos] 创建命名空间 ${ns} 失败：${result}" >&2
     exit 1
   fi
@@ -86,14 +87,16 @@ create_namespace() {
 }
 
 publish_config() {
-  local ns="$1" file="$2" data_id result
+  local ns="$1" file="$2" data_id content result
   data_id=$(basename "$file")
+  # 直接读取内容而不是 content@file：兼容 Windows Git Bash 下 curl 不识别 /d/... 路径
+  content=$(cat "$file")
   result=$(curl_post "${BASE_URL}/v1/cs/configs" \
     --data-urlencode "dataId=${data_id}" \
     --data-urlencode "group=FM" \
     --data-urlencode "tenant=${ns}" \
     --data-urlencode "type=yaml" \
-    --data-urlencode "content@${file}")
+    --data-urlencode "content=${content}")
   if [ "$result" != "true" ]; then
     echo "[init-nacos] 发布配置失败 ${ns}/${data_id}（group=FM）：${result}" >&2
     exit 1
