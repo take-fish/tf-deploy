@@ -1,8 +1,9 @@
-# FishMatrix 集中机编排：网关 + 中间件 + 注册中心（Docker Compose 一键拉起）
+# FishMatrix 集中机编排：网关 + Web + 控制台 + 中间件 + 注册中心
 # 说明：
 #   - 只引用预构建镜像（ghcr.io），不在本机 build —— 保证 `docker compose config` 离线可校验
 #   - 所有变量都有默认值，无 .env 文件也能直接启动（生产环境请复制 .env.example 为 .env 并修改）
-#   - 分散业务机（各成员电脑）的服务编排后续按需补充
+#   - 业务服务（user/chat/reader/game/music）见 docker-compose.services.yml
+#   - 全栈启动：docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
 name: fishmatrix
 
 services:
@@ -66,6 +67,11 @@ services:
     environment:
       PORT: "8080"
       TZ: Asia/Shanghai
+      TF_CHAT_URL: ${TF_CHAT_URL:-http://chat:8102}
+      TF_READER_URL: ${TF_READER_URL:-http://reader:8103}
+      TF_GAME_URL: ${TF_GAME_URL:-http://game:8104}
+      TF_MUSIC_URL: ${TF_MUSIC_URL:-http://music:8105}
+      TF_USER_URL: ${TF_USER_URL:-http://user:8101}
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:
@@ -82,6 +88,18 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:
       - "${CONSOLE_PORT:-8301}:8301"
+
+  web:
+    image: ghcr.io/take-fish/tf-web:${TF_WEB_TAG:-latest}
+    container_name: fm-web
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    depends_on:
+      gateway:
+        condition: service_started
 
 volumes:
   mysql-data:
