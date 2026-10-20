@@ -72,6 +72,9 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_user
+      # 测试管理员与生产密码隔离（TEST_USER_ADMIN_PASSWORD 由脚本生成到 .env）
+      USER_ADMIN_USERNAME: ${USER_ADMIN_USERNAME:-admin}
+      USER_ADMIN_PASSWORD: ${TEST_USER_ADMIN_PASSWORD:-}
     extra_hosts: *test-extra-hosts
     networks:
       - default

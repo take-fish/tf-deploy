@@ -39,6 +39,9 @@ services:
     environment:
       <<: *service-env
       MYSQL_DB: fm_user
+      # 用户中台管理员（密码由 scripts/ensure-user-admin-secrets.sh 生成到 .env）
+      USER_ADMIN_USERNAME: ${USER_ADMIN_USERNAME:-admin}
+      USER_ADMIN_PASSWORD: ${USER_ADMIN_PASSWORD:-}
     ports:
       - "${USER_PORT:-8101}:8101"
 

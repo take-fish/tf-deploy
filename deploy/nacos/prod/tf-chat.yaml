@@ -10,6 +10,10 @@ spring:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:0}
+  sql:
+    init:
+      mode: ${SQL_INIT_MODE:always}
+      encoding: UTF-8
 
 app:
   chat:
@@ -20,3 +24,10 @@ app:
     offline-limit: 200
     max-content-length: 2000
     max-nickname-length: 32
+    # 与用户服务同 compose 网络时使用服务名；分机部署可用 TF_USER_URL 覆盖
+    user-service-url: ${TF_USER_URL:http://user:8101}
+    ws-ticket-ttl-seconds: ${CHAT_WS_TICKET_TTL_SECONDS:60}
+    auth-cache-ttl-seconds: ${CHAT_AUTH_CACHE_TTL_SECONDS:60}
+    recall-window-seconds: ${CHAT_RECALL_WINDOW_SECONDS:120}
+    rate-limit-per-10s: ${CHAT_RATE_LIMIT_PER_10S:20}
+    allowed-origins: ${CHAT_ALLOWED_ORIGINS:*}
