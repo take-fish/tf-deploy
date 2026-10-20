@@ -8,21 +8,25 @@
 #   - 与公共层（docker-compose.yml）共用 project name/network，按 compose 服务名互访
 #   - 集中机全栈运行：中间件默认使用 compose 服务名 mysql / redis / nacos
 #   - 分机部署：用环境变量覆盖为集中机地址，例如：
-#       export MYSQL_HOST=10.28.25.234
-#       export REDIS_HOST=10.28.25.234
-#       export NACOS_ADDR=10.28.25.234:8848
+#       export MYSQL_HOST=10.28.13.214
+#       export REDIS_HOST=10.28.13.214
+#       export NACOS_ADDR=10.28.13.214:8848
 #   - 密码变量：MYSQL_APP_PASSWORD / NACOS_ADMIN_PASSWORD（见集中机 .env）
 name: fishmatrix
 
 x-service-env: &service-env
   TZ: Asia/Shanghai
+  # 激活后从 Nacos Config 拉取 tf-<service>.yaml（group FM，namespace 见 NACOS_NAMESPACE）
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-nacos}
   MYSQL_HOST: ${MYSQL_HOST:-mysql}
   MYSQL_PORT: "3306"
   MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
   MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
   REDIS_HOST: ${REDIS_HOST:-redis}
   REDIS_PORT: "6379"
+  REDIS_DATABASE: "0"
   NACOS_ADDR: ${NACOS_ADDR:-nacos:8848}
+  NACOS_NAMESPACE: ${NACOS_NAMESPACE:-fm-prod}
   NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
   NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
   SQL_INIT_MODE: ${SQL_INIT_MODE:-always}
@@ -32,7 +36,12 @@ services:
     image: ghcr.io/take-fish/tf-user:${TF_USER_TAG:-latest}
     container_name: fm-user
     restart: unless-stopped
-    environment: *service-env
+    environment:
+      <<: *service-env
+      MYSQL_DB: fm_user
+      # 用户中台管理员（密码由 scripts/ensure-user-admin-secrets.sh 生成到 .env）
+      USER_ADMIN_USERNAME: ${USER_ADMIN_USERNAME:-admin}
+      USER_ADMIN_PASSWORD: ${USER_ADMIN_PASSWORD:-}
     ports:
       - "${USER_PORT:-8101}:8101"
 
@@ -40,7 +49,9 @@ services:
     image: ghcr.io/take-fish/tf-chat:${TF_CHAT_TAG:-latest}
     container_name: fm-chat
     restart: unless-stopped
-    environment: *service-env
+    environment:
+      <<: *service-env
+      MYSQL_DB: fm_chat
     ports:
       - "${CHAT_PORT:-8102}:8102"
 
@@ -48,7 +59,9 @@ services:
     image: ghcr.io/take-fish/tf-reader:${TF_READER_TAG:-latest}
     container_name: fm-reader
     restart: unless-stopped
-    environment: *service-env
+    environment:
+      <<: *service-env
+      MYSQL_DB: fm_reader
     ports:
       - "${READER_PORT:-8103}:8103"
 
@@ -56,7 +69,9 @@ services:
     image: ghcr.io/take-fish/tf-game:${TF_GAME_TAG:-latest}
     container_name: fm-game
     restart: unless-stopped
-    environment: *service-env
+    environment:
+      <<: *service-env
+      MYSQL_DB: fm_game
     ports:
       - "${GAME_PORT:-8104}:8104"
 
@@ -64,6 +79,8 @@ services:
     image: ghcr.io/take-fish/tf-music:${TF_MUSIC_TAG:-latest}
     container_name: fm-music
     restart: unless-stopped
-    environment: *service-env
+    environment:
+      <<: *service-env
+      MYSQL_DB: fm_music
     ports:
       - "${MUSIC_PORT:-8105}:8105"

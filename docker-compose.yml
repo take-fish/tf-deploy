@@ -15,7 +15,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fishmatrix}
       TZ: Asia/Shanghai
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      # 宿主 3306 被原生 MySQL 占用，容器端口发布到 13306（宿主机/局域网可用）
+      - "${MYSQL_HOST_PORT:-13306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -56,9 +57,17 @@ services:
     environment:
       MODE: standalone
       TZ: Asia/Shanghai
+      # 鉴权默认关闭；第 4 步在 .env 中置 NACOS_AUTH_ENABLE=true 后重建生效
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-}
     ports:
       - "${NACOS_PORT:-8848}:8848"
       - "9848:9848"
+    volumes:
+      # namespace 与配置持久化（standalone 内嵌 Derby）
+      - nacos-data:/home/nacos/data
 
   gateway:
     image: ghcr.io/take-fish/tf-gateway:${TF_GATEWAY_TAG:-latest}
@@ -105,3 +114,4 @@ volumes:
   mysql-data:
   redis-data:
   es-data:
+  nacos-data:

@@ -1,0 +1,145 @@
+# FishMatrix 测试环境编排（复用集中机共享中间件，逻辑隔离）
+#
+# 用法（在 tf-deploy 目录）：
+#   docker compose -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.test.yml ps
+#   bash scripts/auto-update-test.sh        # 拉取 :test 镜像并重建
+#
+# 隔离方式：
+#   - 独立 project/network（fishmatrix-test），不与生产业务容器混网
+#   - 中间件复用集中机实例：通过专用网络 fishmatrix-test-mw 连接（脚本 connect-test-network.sh）
+#   - MySQL：fm_test_* 库 / Redis：DB1 / Nacos：namespace fm-test
+#   - 镜像：ghcr.io/take-fish/tf-*:test（push test 分支由 CI 构建）
+name: fishmatrix-test
+
+# 共享中间件连接（容器名由 fishmatrix-test-mw 网络解析）
+x-test-middleware: &test-middleware
+  MYSQL_HOST: "${TEST_MYSQL_HOST:-fm-mysql}"
+  MYSQL_PORT: "3306"
+  MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
+  MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
+  REDIS_HOST: "${TEST_REDIS_HOST:-fm-redis}"
+  REDIS_PORT: "6379"
+  REDIS_DATABASE: "1"
+  NACOS_ADDR: "${TEST_NACOS_ADDR:-fm-nacos:8848}"
+  NACOS_NAMESPACE: fm-test
+  NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+  NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
+
+x-test-service-env: &test-service-env
+  TZ: Asia/Shanghai
+  # 激活 Nacos Config：tf-<service>.yaml（group FM，namespace fm-test）
+  SPRING_PROFILES_ACTIVE: nacos
+  SQL_INIT_MODE: always
+  <<: *test-middleware
+
+# Linux 主机上显式提供 host.docker.internal（Docker Desktop 默认已有）
+x-test-extra-hosts: &test-extra-hosts
+  - "host.docker.internal:host-gateway"
+
+services:
+  gateway:
+    image: ghcr.io/take-fish/tf-gateway:${TF_TEST_GATEWAY_TAG:-test}
+    container_name: fm-test-gateway
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      PORT: "8080"
+      TF_USER_URL: http://user:8101
+      TF_CHAT_URL: http://chat:8102
+      TF_READER_URL: http://reader:8103
+      TF_GAME_URL: http://game:8104
+      TF_MUSIC_URL: http://music:8105
+    ports:
+      - "${TEST_GATEWAY_PORT:-18080}:8080"
+
+  web:
+    image: ghcr.io/take-fish/tf-web:${TF_TEST_WEB_TAG:-test}
+    container_name: fm-test-web
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${TEST_WEB_PORT:-18088}:80"
+    depends_on:
+      gateway:
+        condition: service_started
+
+  user:
+    image: ghcr.io/take-fish/tf-user:${TF_TEST_USER_TAG:-test}
+    container_name: fm-test-user
+    restart: unless-stopped
+    environment:
+      <<: *test-service-env
+      MYSQL_DB: fm_test_user
+      # 测试管理员与生产密码隔离（TEST_USER_ADMIN_PASSWORD 由脚本生成到 .env）
+      USER_ADMIN_USERNAME: ${USER_ADMIN_USERNAME:-admin}
+      USER_ADMIN_PASSWORD: ${TEST_USER_ADMIN_PASSWORD:-}
+    extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
+    ports:
+      - "${TEST_USER_PORT:-18101}:8101"
+
+  chat:
+    image: ghcr.io/take-fish/tf-chat:${TF_TEST_CHAT_TAG:-test}
+    container_name: fm-test-chat
+    restart: unless-stopped
+    environment:
+      <<: *test-service-env
+      MYSQL_DB: fm_test_chat
+    extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
+    ports:
+      - "${TEST_CHAT_PORT:-18102}:8102"
+
+  reader:
+    image: ghcr.io/take-fish/tf-reader:${TF_TEST_READER_TAG:-test}
+    container_name: fm-test-reader
+    restart: unless-stopped
+    environment:
+      <<: *test-service-env
+      MYSQL_DB: fm_test_reader
+    extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
+    ports:
+      - "${TEST_READER_PORT:-18103}:8103"
+
+  game:
+    image: ghcr.io/take-fish/tf-game:${TF_TEST_GAME_TAG:-test}
+    container_name: fm-test-game
+    restart: unless-stopped
+    environment:
+      <<: *test-service-env
+      MYSQL_DB: fm_test_game
+    extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
+    ports:
+      - "${TEST_GAME_PORT:-18104}:8104"
+
+  music:
+    image: ghcr.io/take-fish/tf-music:${TF_TEST_MUSIC_TAG:-test}
+    container_name: fm-test-music
+    restart: unless-stopped
+    environment:
+      <<: *test-service-env
+      MYSQL_DB: fm_test_music
+    extra_hosts: *test-extra-hosts
+    networks:
+      - default
+      - shared-mw
+    ports:
+      - "${TEST_MUSIC_PORT:-18105}:8105"
+
+networks:
+  default:
+  shared-mw:
+    external: true
+    name: ${TEST_MW_NETWORK:-fishmatrix-test-mw}
