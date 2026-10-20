@@ -89,6 +89,8 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_chat
+    volumes:
+      - chat-test-images:/app/data/chat-images
     extra_hosts: *test-extra-hosts
     networks:
       - default
@@ -137,6 +139,9 @@ services:
       - shared-mw
     ports:
       - "${TEST_MUSIC_PORT:-18105}:8105"
+
+volumes:
+  chat-test-images:
 
 networks:
   default:

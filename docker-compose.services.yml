@@ -52,6 +52,8 @@ services:
     environment:
       <<: *service-env
       MYSQL_DB: fm_chat
+    volumes:
+      - chat-images:/app/data/chat-images
     ports:
       - "${CHAT_PORT:-8102}:8102"
 
@@ -84,3 +86,6 @@ services:
       MYSQL_DB: fm_music
     ports:
       - "${MUSIC_PORT:-8105}:8105"
+
+volumes:
+  chat-images:
