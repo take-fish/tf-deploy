@@ -2,11 +2,12 @@
 
 FishMatrix（摸鱼矩阵）部署编排与聚合壳仓库。
 
-- **集中机编排**：`docker-compose.yml` 拉起网关 + Web 前端 + 流水线控制台 + MySQL / Redis / Elasticsearch / Nacos
+- **中间件编排**：`docker-compose.middleware.yml` 单独拉起 MySQL / Redis / Elasticsearch / Nacos，生产与测试共用一套中间件地址
+- **集中机编排**：`docker-compose.yml` 拉起网关 + Web 前端 + 流水线控制台
 - **业务服务编排**：`docker-compose.services.yml` 拉起 user / chat / reader / game / music（与公共层共用 network）
-- **测试环境编排**：`docker-compose.test.yml` 复用共享中间件，通过 `fm_test_*` / Redis DB1 / Nacos `fm-test` 逻辑隔离（见 `docs/测试环境说明.md`）
+- **测试环境编排**：`docker-compose.test.yml` 只拉起测试应用，连接共享中间件的 `fm_test_*` 库 / Redis DB1 / Nacos `fm-test`（见 `docs/测试环境说明.md`）
 - **Nacos 配置**：`deploy/nacos/{prod,test}/tf-*.yaml` + `scripts/init-nacos.sh` 集中管理数据源、Redis 与业务参数
-- **数据库初始化**：`scripts/init-db.sh` 幂等创建生产/测试业务库与 `fm_app` 授权
+- **数据库初始化**：`scripts/init-db.sh` 幂等创建生产业务库与 `fm_app` 授权；`scripts/init-test-db.sh` 在同一个 `fm-mysql` 中创建 `fm_test_*` 库与 `fm_test_app` 授权
 - **登录与用户中台**：`tf-user` 负责账号、审批与会话（Redis）；前端入口强制登录，管理员在用户中台审批新用户
 - **管理员密码**：`scripts/ensure-user-admin-secrets.sh` 为生产/测试分别生成到 `.env`（不落库、不打印）
 - **自动更新**：`scripts/auto-update.sh`（生产 `:latest`）与 `scripts/auto-update-test.sh`（测试 `:test`），集中机轮询 ghcr 自动重建（见 `docs/自动更新说明.md`）
@@ -18,15 +19,24 @@ FishMatrix（摸鱼矩阵）部署编排与聚合壳仓库。
 
 ```bash
 cp .env.example .env        # 可选：修改端口与密码
-docker compose up -d        # 拉起中间件 + gateway + console + web
-bash scripts/init-db.sh     # 创建 fm_* / fm_test_* 数据库与 fm_app 授权（首次/密码变更时）
-bash scripts/init-nacos.sh  # 创建 fm-prod / fm-test 命名空间并发布 FM group 配置
 bash scripts/ensure-user-admin-secrets.sh  # 生成用户中台管理员密码到 .env（幂等）
-docker compose -f docker-compose.yml -f docker-compose.services.yml up -d   # 再拉起 5 个业务服务
-docker compose -f docker-compose.yml -f docker-compose.services.yml ps      # 查看全栈状态
+bash scripts/ensure-test-secrets.sh        # 生成测试 MySQL 账号密码到 .env（幂等）
 
-# 测试环境（push test 构建 :test 镜像后）
+# 1) 共享中间件（只有这一套）
+docker compose -f docker-compose.middleware.yml up -d mysql redis nacos
+
+# 2) 数据库与 Nacos
+bash scripts/init-db.sh       # 生产 fm_* 库与 fm_app 授权
+bash scripts/init-test-db.sh  # 测试 fm_test_* 库与 fm_test_app 授权
+bash scripts/init-nacos.sh    # 创建 fm-prod / fm-test 命名空间并发布 FM group 配置
+
+# 3) 生产应用
+docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.services.yml ps
+
+# 4) 测试应用（push test 构建 :test 镜像后）
 docker compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml ps -a
 bash scripts/auto-update-test.sh
 ```
 
@@ -65,8 +75,10 @@ sudo bash scripts/install-auto-update.sh
 git submodule update --init --recursive   # 初始化全部子仓
 git submodule foreach 'git checkout master && git pull'   # 批量更新子仓
 python scripts/setup-branch-protection.py # 配置 11 仓分支保护（需 PAT）
-bash scripts/init-db.sh                   # 幂等初始化数据库与授权
-bash scripts/init-nacos.sh                # 幂等创建命名空间并发布配置
+docker compose -f docker-compose.middleware.yml up -d mysql redis nacos   # 单独启动/更新共享中间件（ES 未启用）
+bash scripts/init-db.sh                   # 幂等初始化生产数据库与授权
+bash scripts/init-test-db.sh              # 幂等初始化测试数据库与授权
+bash scripts/init-nacos.sh                # 幂等创建命名空间并发布生产/测试配置
 bash scripts/auto-update.sh               # 手动跑一轮生产镜像更新
 bash scripts/auto-update-test.sh          # 手动跑一轮测试镜像更新
 ```
