@@ -1,74 +1,16 @@
-# FishMatrix 集中机编排：网关 + Web + 控制台 + 中间件 + 注册中心
+# FishMatrix 集中机编排：网关 + Web + 控制台
 # 说明：
+#   - 中间件（MySQL / Redis / Elasticsearch / Nacos）已拆分到 docker-compose.middleware.yml，
+#     生产与测试共用一套中间件地址，应用侧按库 / Redis DB / Nacos namespace 隔离
 #   - 只引用预构建镜像（ghcr.io），不在本机 build —— 保证 `docker compose config` 离线可校验
 #   - 所有变量都有默认值，无 .env 文件也能直接启动（生产环境请复制 .env.example 为 .env 并修改）
 #   - 业务服务（user/chat/reader/game/music）见 docker-compose.services.yml
-#   - 全栈启动：docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+#   - 启动顺序：
+#       docker compose -f docker-compose.middleware.yml up -d mysql redis nacos
+#       docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
 name: fishmatrix
 
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: fm-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fishmatrix}
-      TZ: Asia/Shanghai
-    ports:
-      # 宿主 3306 被原生 MySQL 占用，容器端口发布到 13306（宿主机/局域网可用）
-      - "${MYSQL_HOST_PORT:-13306}:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
-  redis:
-    image: redis:7-alpine
-    container_name: fm-redis
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
-    container_name: fm-es
-    restart: unless-stopped
-    environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
-      TZ: Asia/Shanghai
-    ports:
-      - "${ES_PORT:-9200}:9200"
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-
-  nacos:
-    image: nacos/nacos-server:v2.5.1
-    container_name: fm-nacos
-    restart: unless-stopped
-    environment:
-      MODE: standalone
-      TZ: Asia/Shanghai
-      # 鉴权默认关闭；第 4 步在 .env 中置 NACOS_AUTH_ENABLE=true 后重建生效
-      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
-      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-}
-      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-}
-      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-}
-    ports:
-      - "${NACOS_PORT:-8848}:8848"
-      - "9848:9848"
-    volumes:
-      # namespace 与配置持久化（standalone 内嵌 Derby）
-      - nacos-data:/home/nacos/data
-
   gateway:
     image: ghcr.io/take-fish/tf-gateway:${TF_GATEWAY_TAG:-latest}
     container_name: fm-gateway
@@ -83,9 +25,9 @@ services:
       TF_USER_URL: ${TF_USER_URL:-http://user:8101}
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
-    depends_on:
-      redis:
-        condition: service_started
+    networks:
+      - default
+      - mw
 
   console:
     image: ghcr.io/take-fish/tf-console:${TF_CONSOLE_TAG:-latest}
@@ -97,6 +39,9 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:
       - "${CONSOLE_PORT:-8301}:8301"
+    networks:
+      - default
+      - mw
 
   web:
     image: ghcr.io/take-fish/tf-web:${TF_WEB_TAG:-latest}
@@ -109,9 +54,12 @@ services:
     depends_on:
       gateway:
         condition: service_started
+    networks:
+      - default
+      - mw
 
-volumes:
-  mysql-data:
-  redis-data:
-  es-data:
-  nacos-data:
+networks:
+  # 共享中间件网络（由 docker-compose.middleware.yml 创建）
+  mw:
+    external: true
+    name: fishmatrix-mw

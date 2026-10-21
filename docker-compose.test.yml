@@ -1,30 +1,33 @@
-# FishMatrix 测试环境编排（复用集中机共享中间件，逻辑隔离）
+# FishMatrix 测试环境编排（共享中间件，逻辑隔离）
+#
+# 中间件只运行一套：docker-compose.middleware.yml 中的 fm-mysql / fm-redis / fm-nacos。
+# 测试应用通过 fishmatrix-mw 网络访问同一套中间件，但使用独立实例/命名空间：
+#   - MySQL：fm_test_* 库，账号 fm_test_app（只授权 fm_test_%）
+#   - Redis：DB1（生产用 DB0）
+#   - Nacos：namespace fm-test（生产用 fm-prod）
 #
 # 用法（在 tf-deploy 目录）：
+#   bash scripts/ensure-test-secrets.sh
+#   docker compose -f docker-compose.middleware.yml up -d mysql redis nacos
+#   bash scripts/init-test-db.sh
 #   docker compose -f docker-compose.test.yml up -d
-#   docker compose -f docker-compose.test.yml ps
-#   bash scripts/auto-update-test.sh        # 拉取 :test 镜像并重建
-#
-# 隔离方式：
-#   - 独立 project/network（fishmatrix-test），不与生产业务容器混网
-#   - 中间件复用集中机实例：通过专用网络 fishmatrix-test-mw 连接（脚本 connect-test-network.sh）
-#   - MySQL：fm_test_* 库 / Redis：DB1 / Nacos：namespace fm-test
-#   - 镜像：ghcr.io/take-fish/tf-*:test（push test 分支由 CI 构建）
+#   docker compose -f docker-compose.test.yml ps -a
 name: fishmatrix-test
 
-# 共享中间件连接（容器名由 fishmatrix-test-mw 网络解析）
+# 测试应用连接共享中间件
 x-test-middleware: &test-middleware
-  MYSQL_HOST: "${TEST_MYSQL_HOST:-fm-mysql}"
+  MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql}"
   MYSQL_PORT: "3306"
-  MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
-  MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
-  REDIS_HOST: "${TEST_REDIS_HOST:-fm-redis}"
+  MYSQL_APP_USER: "${TEST_MYSQL_APP_USER:-fm_test_app}"
+  MYSQL_APP_PASSWORD: "${TEST_MYSQL_APP_PASSWORD:-}"
+  REDIS_HOST: "${TEST_REDIS_HOST:-redis}"
   REDIS_PORT: "6379"
   REDIS_DATABASE: "1"
-  NACOS_ADDR: "${TEST_NACOS_ADDR:-fm-nacos:8848}"
+  NACOS_ADDR: "${TEST_NACOS_ADDR:-nacos:8848}"
   NACOS_NAMESPACE: fm-test
   NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
-  NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
+  # 共享 Nacos 的管理员密码（生产 .env 中的 NACOS_ADMIN_PASSWORD）
+  NACOS_PASSWORD: "${NACOS_ADMIN_PASSWORD:-}"
 
 x-test-service-env: &test-service-env
   TZ: Asia/Shanghai
@@ -33,11 +36,59 @@ x-test-service-env: &test-service-env
   SQL_INIT_MODE: always
   <<: *test-middleware
 
-# Linux 主机上显式提供 host.docker.internal（Docker Desktop 默认已有）
-x-test-extra-hosts: &test-extra-hosts
-  - "host.docker.internal:host-gateway"
+# 应用服务等待共享中间件可达 + Nacos 配置发布完成
+x-test-dependencies: &test-dependencies
+  middleware-ready:
+    condition: service_completed_successfully
+  nacos-init:
+    condition: service_completed_successfully
 
 services:
+  # 一次性探针：等待共享中间件端口可达，避免应用在中间件启动期间反复失败
+  middleware-ready:
+    image: redis:7-alpine
+    container_name: fm-test-middleware-ready
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for target in mysql:3306 redis:6379 nacos:8848; do
+          host=$${target%:*}
+          port=$${target#*:}
+          until nc -z "$$host" "$$port"; do
+            echo "waiting for $$target"
+            sleep 2
+          done
+        done
+        echo "shared middleware ready"
+    networks:
+      - default
+      - mw
+
+  # 一次性任务：在共享 Nacos 的 fm-test namespace 发布测试配置
+  nacos-init:
+    image: nacos/nacos-server:v2.5.1
+    container_name: fm-test-nacos-init
+    restart: "no"
+    environment:
+      NACOS_HOST: nacos:8848
+      NACOS_CONTEXT: /nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: "${NACOS_ADMIN_PASSWORD:-}"
+      NACOS_AUTH_ENABLE: "${NACOS_AUTH_ENABLE:-false}"
+      TZ: Asia/Shanghai
+    volumes:
+      - ./scripts/init-test-nacos.sh:/init/init-test-nacos.sh:ro
+      - ./deploy/nacos/test:/configs:ro
+    entrypoint: ["/bin/sh", "/init/init-test-nacos.sh"]
+    networks:
+      - default
+      - mw
+    depends_on:
+      middleware-ready:
+        condition: service_completed_successfully
+
   gateway:
     image: ghcr.io/take-fish/tf-gateway:${TF_TEST_GATEWAY_TAG:-test}
     container_name: fm-test-gateway
@@ -75,12 +126,12 @@ services:
       # 测试管理员与生产密码隔离（TEST_USER_ADMIN_PASSWORD 由脚本生成到 .env）
       USER_ADMIN_USERNAME: ${USER_ADMIN_USERNAME:-admin}
       USER_ADMIN_PASSWORD: ${TEST_USER_ADMIN_PASSWORD:-}
-    extra_hosts: *test-extra-hosts
-    networks:
-      - default
-      - shared-mw
+    depends_on: *test-dependencies
     ports:
       - "${TEST_USER_PORT:-18101}:8101"
+    networks:
+      - default
+      - mw
 
   chat:
     image: ghcr.io/take-fish/tf-chat:${TF_TEST_CHAT_TAG:-test}
@@ -89,12 +140,14 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_chat
-    extra_hosts: *test-extra-hosts
-    networks:
-      - default
-      - shared-mw
+    volumes:
+      - chat-test-images:/app/data/chat-images
+    depends_on: *test-dependencies
     ports:
       - "${TEST_CHAT_PORT:-18102}:8102"
+    networks:
+      - default
+      - mw
 
   reader:
     image: ghcr.io/take-fish/tf-reader:${TF_TEST_READER_TAG:-test}
@@ -103,12 +156,12 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_reader
-    extra_hosts: *test-extra-hosts
-    networks:
-      - default
-      - shared-mw
+    depends_on: *test-dependencies
     ports:
       - "${TEST_READER_PORT:-18103}:8103"
+    networks:
+      - default
+      - mw
 
   game:
     image: ghcr.io/take-fish/tf-game:${TF_TEST_GAME_TAG:-test}
@@ -117,12 +170,12 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_game
-    extra_hosts: *test-extra-hosts
-    networks:
-      - default
-      - shared-mw
+    depends_on: *test-dependencies
     ports:
       - "${TEST_GAME_PORT:-18104}:8104"
+    networks:
+      - default
+      - mw
 
   music:
     image: ghcr.io/take-fish/tf-music:${TF_TEST_MUSIC_TAG:-test}
@@ -131,15 +184,19 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_music
-    extra_hosts: *test-extra-hosts
-    networks:
-      - default
-      - shared-mw
+    depends_on: *test-dependencies
     ports:
       - "${TEST_MUSIC_PORT:-18105}:8105"
+    networks:
+      - default
+      - mw
+
+volumes:
+  chat-test-images:
 
 networks:
   default:
-  shared-mw:
+  # 共享中间件网络（由 docker-compose.middleware.yml 创建）
+  mw:
     external: true
-    name: ${TEST_MW_NETWORK:-fishmatrix-test-mw}
+    name: fishmatrix-mw

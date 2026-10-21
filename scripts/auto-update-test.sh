@@ -2,7 +2,8 @@
 # FishMatrix 测试环境自动更新：轮询 ghcr 的 :test 镜像并重建测试容器
 #
 # 设计：
-#   - 只操作 docker-compose.test.yml 中的测试栈，不触碰生产容器与中间件
+#   - 只操作 docker-compose.test.yml 中的测试应用，不触碰生产容器与共享中间件
+#   - 测试中间件由 docker-compose.middleware.yml 单独维护
 #   - push test 分支 → CI 构建并推送 :test → 本脚本每 2 分钟拉取并重建有变化的服务
 #   - 与 auto-update.sh 相同的 flock 防重入
 #
@@ -25,13 +26,10 @@ if command -v flock >/dev/null 2>&1; then
   flock -n 9 || { log "上一轮更新仍在运行，跳过本轮"; exit 0; }
 fi
 
-if [ -z "$(docker compose "${COMPOSE_FILES[@]}" ps -q 2>/dev/null | tr -d '[:space:]')" ]; then
-  log "测试栈未运行，跳过"
+if [ -z "$(docker compose "${COMPOSE_FILES[@]}" ps -q "${APP_SERVICES[@]}" 2>/dev/null | tr -d '[:space:]')" ]; then
+  log "测试应用栈未运行，跳过"
   exit 0
 fi
-
-# 中间件容器被重建后需要重新接入测试网络
-bash "$REPO_DIR/scripts/connect-test-network.sh" >/dev/null
 
 log "轮询测试镜像：${APP_SERVICES[*]}"
 # ghcr 层下载在部分网络下极慢（实测约 20 KB/s），必须设置超时避免永久占用锁

@@ -10,7 +10,7 @@
 #   - 从各仓库当前工作树构建，便于在 feature 分支上验证尚未合并的代码
 #   - Java 服务以生产 :latest 镜像为基底覆盖 app.jar，不需要拉取基础镜像
 #   - web 使用 Node 24 本地构建 dist，再以本地 nginx:stable-alpine 组装镜像
-#   - 仅重建指定的测试服务，不影响生产容器与共享中间件
+#   - 仅重建指定的测试服务，不影响生产容器与测试中间件
 #
 # 相关环境变量：
 #   CODE_ROOT   服务仓库根目录，默认 /d/code/cloud-take-fish

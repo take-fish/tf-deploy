@@ -44,6 +44,9 @@ services:
       USER_ADMIN_PASSWORD: ${USER_ADMIN_PASSWORD:-}
     ports:
       - "${USER_PORT:-8101}:8101"
+    networks:
+      - default
+      - mw
 
   chat:
     image: ghcr.io/take-fish/tf-chat:${TF_CHAT_TAG:-latest}
@@ -52,8 +55,13 @@ services:
     environment:
       <<: *service-env
       MYSQL_DB: fm_chat
+    volumes:
+      - chat-images:/app/data/chat-images
     ports:
       - "${CHAT_PORT:-8102}:8102"
+    networks:
+      - default
+      - mw
 
   reader:
     image: ghcr.io/take-fish/tf-reader:${TF_READER_TAG:-latest}
@@ -64,6 +72,9 @@ services:
       MYSQL_DB: fm_reader
     ports:
       - "${READER_PORT:-8103}:8103"
+    networks:
+      - default
+      - mw
 
   game:
     image: ghcr.io/take-fish/tf-game:${TF_GAME_TAG:-latest}
@@ -74,6 +85,9 @@ services:
       MYSQL_DB: fm_game
     ports:
       - "${GAME_PORT:-8104}:8104"
+    networks:
+      - default
+      - mw
 
   music:
     image: ghcr.io/take-fish/tf-music:${TF_MUSIC_TAG:-latest}
@@ -84,3 +98,15 @@ services:
       MYSQL_DB: fm_music
     ports:
       - "${MUSIC_PORT:-8105}:8105"
+    networks:
+      - default
+      - mw
+
+volumes:
+  chat-images:
+
+networks:
+  # 共享中间件网络（由 docker-compose.middleware.yml 创建）
+  mw:
+    external: true
+    name: fishmatrix-mw
