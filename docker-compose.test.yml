@@ -178,6 +178,8 @@ services:
     environment:
       TZ: Asia/Shanghai
       PORT: "8080"
+      # 测试栈必须显式标记环境，否则网关默认写入 production，日志检索按 env 过滤会串环境。
+      APP_ENV: test
       NACOS_ADDR: ${TEST_NACOS_ADDR:-nacos:8848}
       NACOS_NAMESPACE: fm-test
       GATEWAY_NACOS_USERNAME: ${TEST_GATEWAY_NACOS_USERNAME:-fm-gateway-ro-test}

@@ -1,0 +1,68 @@
+// FishMatrix 容器日志采集：Docker socket -> Loki
+//
+// 生产、测试以及中间件容器统一标记 stack="fishmatrix"，
+// 应用日志本身是 JSON（Java logstash encoder / Go slog），
+// 由 Loki 查询侧的 `| json` 解析 trace_id、request_id、env 等字段。
+//
+// 注意：容器名规则限定为 fm-*，避免把其他项目的容器日志写入 Loki。
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "fishmatrix" {
+  targets = []
+
+  // 不采集日志组件自身，避免自循环与容器重建后的陈旧 target
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/fm-(loki|alloy|grafana)"
+    action        = "drop"
+  }
+
+  // 只采集 FishMatrix 的容器
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/fm-.*"
+    action        = "keep"
+  }
+
+  // 去掉容器名前导的斜杠，例如 /fm-user -> fm-user
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  // compose 服务名，例如 user / gateway / chat
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "compose_service"
+  }
+
+  // stdout / stderr
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+}
+
+loki.source.docker "fishmatrix" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.fishmatrix.rules
+  labels        = { stack = "fishmatrix" }
+  forward_to    = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
