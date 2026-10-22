@@ -36,6 +36,7 @@ x-test-service-env: &test-service-env
   # 业务容器不建表、不写 seed；Flyway 由独立迁移 Job 执行
   SQL_INIT_MODE: never
   SPRING_FLYWAY_ENABLED: "false"
+  APP_ENV: test
   APP_VERSION: ${TEST_APP_VERSION:-test}
   GIT_COMMIT: ${TEST_GIT_COMMIT:-unknown}
   <<: *test-middleware

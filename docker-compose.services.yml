@@ -30,6 +30,7 @@ x-service-env: &service-env
   NACOS_USERNAME: ${FM_APP_NACOS_USERNAME:-fm-app-rw-prod}
   NACOS_PASSWORD: ${FM_APP_NACOS_PASSWORD:-}
   # 注册到 Nacos 的构建信息，便于网关/排查时区分实例版本
+  APP_ENV: production
   APP_VERSION: ${APP_VERSION:-dev}
   GIT_COMMIT: ${GIT_COMMIT:-unknown}
   SQL_INIT_MODE: ${SQL_INIT_MODE:-never}
