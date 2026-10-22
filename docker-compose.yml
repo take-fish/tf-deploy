@@ -65,8 +65,8 @@ services:
       gateway:
         condition: service_started
     networks:
+      # nginx 使用上游名 gateway；只接生产默认网络，避免在 mw 上解析到测试网关
       - default
-      - mw
 
 networks:
   # 共享中间件网络（由 docker-compose.middleware.yml 创建）
