@@ -11,7 +11,7 @@
 #       export MYSQL_HOST=10.28.13.214
 #       export REDIS_HOST=10.28.13.214
 #       export NACOS_ADDR=10.28.13.214:8848
-#   - 密码变量：每服务 FM_<SVC>_DB_PASSWORD / NACOS_ADMIN_PASSWORD（见集中机 .env）
+#   - 密码变量：每服务 FM_<SVC>_DB_PASSWORD / FM_APP_NACOS_PASSWORD（见集中机 .env）
 #   - 业务容器不建表；schema 由 docker-compose.migrate.yml 的迁移 Job 管理
 name: fishmatrix
 
@@ -26,8 +26,12 @@ x-service-env: &service-env
   REDIS_DATABASE: "0"
   NACOS_ADDR: ${NACOS_ADDR:-nacos:8848}
   NACOS_NAMESPACE: ${NACOS_NAMESPACE:-fm-prod}
-  NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
-  NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:-}
+  # 应用读写账号：目标 namespace 配置读 + 服务注册，不再使用管理员
+  NACOS_USERNAME: ${FM_APP_NACOS_USERNAME:-fm-app-rw-prod}
+  NACOS_PASSWORD: ${FM_APP_NACOS_PASSWORD:-}
+  # 注册到 Nacos 的构建信息，便于网关/排查时区分实例版本
+  APP_VERSION: ${APP_VERSION:-dev}
+  GIT_COMMIT: ${GIT_COMMIT:-unknown}
   SQL_INIT_MODE: ${SQL_INIT_MODE:-never}
   SPRING_FLYWAY_ENABLED: "false"
 

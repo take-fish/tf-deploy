@@ -25,9 +25,9 @@ x-test-middleware: &test-middleware
   REDIS_DATABASE: "1"
   NACOS_ADDR: "${TEST_NACOS_ADDR:-nacos:8848}"
   NACOS_NAMESPACE: fm-test
-  NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
-  # 共享 Nacos 的管理员密码（生产 .env 中的 NACOS_ADMIN_PASSWORD）
-  NACOS_PASSWORD: "${NACOS_ADMIN_PASSWORD:-}"
+  # 测试应用读写账号：fm-test namespace 配置读 + 服务注册
+  NACOS_USERNAME: "${TEST_FM_APP_NACOS_USERNAME:-fm-app-rw-test}"
+  NACOS_PASSWORD: "${TEST_FM_APP_NACOS_PASSWORD:-}"
 
 x-test-service-env: &test-service-env
   TZ: Asia/Shanghai
@@ -36,6 +36,8 @@ x-test-service-env: &test-service-env
   # 业务容器不建表、不写 seed；Flyway 由独立迁移 Job 执行
   SQL_INIT_MODE: never
   SPRING_FLYWAY_ENABLED: "false"
+  APP_VERSION: ${TEST_APP_VERSION:-test}
+  GIT_COMMIT: ${TEST_GIT_COMMIT:-unknown}
   <<: *test-middleware
 
 # 应用服务等待测试 MySQL 可达 + Nacos 配置发布完成
@@ -175,6 +177,14 @@ services:
     environment:
       TZ: Asia/Shanghai
       PORT: "8080"
+      NACOS_ADDR: ${TEST_NACOS_ADDR:-nacos:8848}
+      NACOS_NAMESPACE: fm-test
+      GATEWAY_NACOS_USERNAME: ${TEST_GATEWAY_NACOS_USERNAME:-fm-gateway-ro-test}
+      GATEWAY_NACOS_PASSWORD: ${TEST_GATEWAY_NACOS_PASSWORD:-}
+      GATEWAY_CONFIG_DATA_ID: tf-gateway.yaml
+      GATEWAY_CONFIG_GROUP: FM
+      GATEWAY_DISCOVERY_GROUP: DEFAULT_GROUP
+      GATEWAY_DISCOVERY_ENABLED: ${GATEWAY_DISCOVERY_ENABLED:-true}
       TF_USER_URL: http://user:8101
       TF_CHAT_URL: http://chat:8102
       TF_READER_URL: http://reader:8103
@@ -182,6 +192,9 @@ services:
       TF_MUSIC_URL: http://music:8105
     ports:
       - "${TEST_GATEWAY_PORT:-18080}:8080"
+    networks:
+      - default
+      - mw
 
   web:
     image: ghcr.io/take-fish/tf-web:${TF_TEST_WEB_TAG:-test}

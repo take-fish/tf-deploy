@@ -2,9 +2,10 @@
 # 本地构建并部署测试栈（GHCR 镜像拉取受限时的备用通道）
 #
 # 用法：
-#   bash scripts/build-test-local.sh                  # 构建全部 5 个 Java 服务
+#   bash scripts/build-test-local.sh                  # 构建 5 个 Java 服务 + 网关
 #   bash scripts/build-test-local.sh user chat        # 只构建指定服务
 #   bash scripts/build-test-local.sh web user         # 前端 + user 服务
+#   bash scripts/build-test-local.sh gateway          # 只构建 Go 网关
 #
 # 说明：
 #   - 从各仓库当前工作树构建，便于在 feature 分支上验证尚未合并的代码
@@ -25,7 +26,7 @@ NODE_BIN="${NODE_BIN:-/d/develop/nodejs-24.22.0}"
 
 SERVICES=("$@")
 if [ "${#SERVICES[@]}" -eq 0 ]; then
-  SERVICES=(user chat reader game music)
+  SERVICES=(user chat reader game music gateway)
 fi
 
 log() { echo "[build-test-local] $*"; }
@@ -67,11 +68,47 @@ EOF
   log "镜像已更新：ghcr.io/take-fish/tf-web:test"
 }
 
+build_gateway() {
+  local repo="$CODE_ROOT/tf-gateway"
+  local base="ghcr.io/take-fish/tf-gateway:latest"
+  local ctx="$BUILD_ROOT/gateway"
+
+  if [ ! -f "$repo/Dockerfile" ]; then
+    log "跳过 gateway：未找到 $repo/Dockerfile"
+    return
+  fi
+
+  if docker image inspect "$base" >/dev/null 2>&1; then
+    # 复用已拉取的网关镜像作为基底，避免重新拉取 golang/distroless 构建层
+    log "构建 tf-gateway（基于 $base）..."
+    mkdir -p "$BUILD_ROOT"
+    (cd "$repo" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+      go build -trimpath -ldflags "-s -w -X main.version=test" -o "$BUILD_ROOT/tf-gateway" .)
+    rm -rf "$ctx"
+    mkdir -p "$ctx"
+    cp "$BUILD_ROOT/tf-gateway" "$ctx/tf-gateway"
+    cat > "$ctx/Dockerfile" <<EOF
+FROM $base
+COPY tf-gateway /app/tf-gateway
+EOF
+    docker build --platform linux/amd64 -t "ghcr.io/take-fish/tf-gateway:test" "$ctx"
+  else
+    log "构建 tf-gateway（完整 Dockerfile）..."
+    docker build --platform linux/amd64 --build-arg VERSION=test \
+      -t "ghcr.io/take-fish/tf-gateway:test" "$repo"
+  fi
+  log "镜像已更新：ghcr.io/take-fish/tf-gateway:test"
+}
+
 MIGRATE_SERVICES=()
 
 for svc in "${SERVICES[@]}"; do
   if [ "$svc" = "web" ]; then
     build_web
+    continue
+  fi
+  if [ "$svc" = "gateway" ]; then
+    build_gateway
     continue
   fi
 
