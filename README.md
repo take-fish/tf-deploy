@@ -11,6 +11,7 @@ FishMatrix（摸鱼矩阵）部署编排与聚合壳仓库。
 - **登录与用户中台**：`tf-user` 负责账号、审批与会话（Redis）；前端入口强制登录，管理员在用户中台审批新用户
 - **管理员密码**：`scripts/ensure-user-admin-secrets.sh` 为生产/测试分别生成到 `.env`（不落库、不打印）
 - **自动更新**：`scripts/auto-update.sh`（生产 `:latest`）与 `scripts/auto-update-test.sh`（测试 `:test`），集中机轮询 ghcr 自动重建（见 `docs/自动更新说明.md`）
+- **日志与链路追踪**：网关生成 trace_id，Java 服务输出 JSON 日志，Alloy 采集 Docker stdout 写入 Loki；流水线中台 `/logs` 与 `scripts/trace.sh` 按编号检索（见 `docs/日志与链路追踪.md`）
 - **大仓聚合壳**：git submodule 挂载 10 个服务仓库，便于统一浏览（不做统一构建）
 - **仓库治理脚本**：`scripts/setup-branch-protection.py` 批量配置分支保护
 - **CI 模板**：`docs/ci-templates/` 各技术栈的 CI / 发版工作流模板
@@ -21,9 +22,13 @@ FishMatrix（摸鱼矩阵）部署编排与聚合壳仓库。
 cp .env.example .env        # 可选：修改端口与密码
 bash scripts/ensure-user-admin-secrets.sh  # 生成用户中台管理员密码到 .env（幂等）
 bash scripts/ensure-test-secrets.sh        # 生成测试 MySQL 账号密码到 .env（幂等）
+bash scripts/ensure-observability-secrets.sh  # 生成日志检索口令与 Grafana 管理员密码（幂等）
 
 # 1) 共享中间件（只有这一套）
 docker compose -f docker-compose.middleware.yml up -d mysql redis nacos
+
+# 1.1) 日志与可观测性（可选，但日志检索依赖它）
+docker compose -f docker-compose.middleware.yml up -d loki alloy grafana
 
 # 2) 数据库与 Nacos
 bash scripts/init-db.sh       # 生产 fm_* 库与 fm_app 授权
@@ -47,8 +52,10 @@ bash scripts/auto-update-test.sh
 | Web 前端（需登录） | `http://localhost:8088` |
 | 统一网关 | `http://localhost:8080` |
 | 用户中台 | `http://localhost:8101/admin/` 或 `http://localhost:8088/api/v1/user/admin/index.html` |
-| 流水线控制台 | `http://localhost:8301` |
+| 流水线控制台（含日志检索 `/logs`） | `http://localhost:8301` |
 | Nacos 控制台 | `http://localhost:8848/nacos` |
+| Grafana（仅宿主机回环） | `http://127.0.0.1:13000` |
+| Loki API（仅宿主机回环） | `http://127.0.0.1:13100` |
 
 拉取私有镜像（首次）：
 
@@ -81,4 +88,6 @@ bash scripts/init-test-db.sh              # 幂等初始化测试数据库与授
 bash scripts/init-nacos.sh                # 幂等创建命名空间并发布生产/测试配置
 bash scripts/auto-update.sh               # 手动跑一轮生产镜像更新
 bash scripts/auto-update-test.sh          # 手动跑一轮测试镜像更新
+bash scripts/trace.sh <编号>               # 按链路编号查询集中日志
+docker compose -f docker-compose.middleware.yml up -d loki alloy grafana   # 更新日志组件
 ```

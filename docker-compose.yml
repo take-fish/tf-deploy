@@ -47,6 +47,9 @@ services:
       PORT: "8301"
       TZ: Asia/Shanghai
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      LOKI_URL: ${LOKI_URL:-http://loki:3100}
+      # 非空时“日志检索”必须输入口令；由 scripts/ensure-observability-secrets.sh 生成
+      TF_CONSOLE_LOG_TOKEN: ${TF_CONSOLE_LOG_TOKEN:-}
     ports:
       - "${CONSOLE_PORT:-8301}:8301"
     networks:
