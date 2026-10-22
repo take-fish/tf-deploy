@@ -17,6 +17,10 @@ COMPOSE_FILES=(-f docker-compose.test.yml)
 
 # 测试栈内的应用服务
 APP_SERVICES=(gateway web user chat reader game music)
+# 需要先执行 Flyway 迁移的数据库服务与对应一次性任务
+MIGRATE_SERVICES=(user chat reader)
+MIGRATE_JOBS=(db-migrate-user db-migrate-chat db-migrate-reader)
+MIGRATE_MARKER="$REPO_DIR/.fm-test-migrated-images"
 
 log() { echo "[fm-auto-update-test] $(date '+%F %T') $*"; }
 
@@ -38,6 +42,20 @@ if ! timeout "$PULL_TIMEOUT" docker compose "${COMPOSE_FILES[@]}" pull -q "${APP
   log "ERROR: 测试镜像拉取失败或超时（${PULL_TIMEOUT}s）——检查 ghcr 凭据/网络；"
   log "       可改用本地构建部署：bash scripts/build-test-local.sh user chat reader game music"
   exit 1
+fi
+
+# 镜像变化时先跑迁移任务，再重建业务容器，避免新代码启动在旧 schema 上
+image_ids=$(for svc in "${MIGRATE_SERVICES[@]}"; do
+  ref=$(docker compose "${COMPOSE_FILES[@]}" config --images | grep -m1 "/tf-${svc}:")
+  docker image inspect "$ref" --format '{{.Id}}'
+done | sha256sum | cut -d' ' -f1)
+previous_ids=$(cat "$MIGRATE_MARKER" 2>/dev/null || true)
+if [ "$image_ids" != "$previous_ids" ]; then
+  log "迁移服务镜像有变化，执行 Flyway：${MIGRATE_JOBS[*]}"
+  docker compose "${COMPOSE_FILES[@]}" up --force-recreate "${MIGRATE_JOBS[@]}"
+  printf '%s\n' "$image_ids" > "$MIGRATE_MARKER"
+else
+  log "迁移服务镜像未变化，跳过 Flyway"
 fi
 
 for svc in "${APP_SERVICES[@]}"; do

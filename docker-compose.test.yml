@@ -1,25 +1,25 @@
-# FishMatrix 测试环境编排（共享中间件，逻辑隔离）
+# FishMatrix 测试环境编排（独立测试 MySQL + 共享 Redis/Nacos）
 #
-# 中间件只运行一套：docker-compose.middleware.yml 中的 fm-mysql / fm-redis / fm-nacos。
-# 测试应用通过 fishmatrix-mw 网络访问同一套中间件，但使用独立实例/命名空间：
-#   - MySQL：fm_test_* 库，账号 fm_test_app（只授权 fm_test_%）
-#   - Redis：DB1（生产用 DB0）
-#   - Nacos：namespace fm-test（生产用 fm-prod）
+# MySQL 使用独立实例：docker-compose.middleware.yml 中的 mysql-test（fm-test-mysql）。
+# 测试应用通过 fishmatrix-mw 网络访问：
+#   - MySQL：fm_test_* 库，每服务独立运行时账号（只授 DML）
+#   - Redis：共享实例 DB1（生产用 DB0）
+#   - Nacos：共享实例 namespace fm-test（生产用 fm-prod）
+# 业务容器不执行 DDL/seed；schema 由 db-migrate-* 一次性任务用迁移账号执行。
 #
 # 用法（在 tf-deploy 目录）：
 #   bash scripts/ensure-test-secrets.sh
-#   docker compose -f docker-compose.middleware.yml up -d mysql redis nacos
+#   docker compose -f docker-compose.middleware.yml up -d mysql-test redis nacos
 #   bash scripts/init-test-db.sh
+#   bash scripts/build-test-local.sh user chat reader
 #   docker compose -f docker-compose.test.yml up -d
 #   docker compose -f docker-compose.test.yml ps -a
 name: fishmatrix-test
 
-# 测试应用连接共享中间件
+# 测试应用连接独立测试 MySQL + 共享 Redis/Nacos
 x-test-middleware: &test-middleware
-  MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql}"
-  MYSQL_PORT: "3306"
-  MYSQL_APP_USER: "${TEST_MYSQL_APP_USER:-fm_test_app}"
-  MYSQL_APP_PASSWORD: "${TEST_MYSQL_APP_PASSWORD:-}"
+  MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql-test}"
+  MYSQL_PORT: "${TEST_MYSQL_PORT:-3306}"
   REDIS_HOST: "${TEST_REDIS_HOST:-redis}"
   REDIS_PORT: "6379"
   REDIS_DATABASE: "1"
@@ -33,10 +33,12 @@ x-test-service-env: &test-service-env
   TZ: Asia/Shanghai
   # 激活 Nacos Config：tf-<service>.yaml（group FM，namespace fm-test）
   SPRING_PROFILES_ACTIVE: nacos
-  SQL_INIT_MODE: always
+  # 业务容器不建表、不写 seed；Flyway 由独立迁移 Job 执行
+  SQL_INIT_MODE: never
+  SPRING_FLYWAY_ENABLED: "false"
   <<: *test-middleware
 
-# 应用服务等待共享中间件可达 + Nacos 配置发布完成
+# 应用服务等待测试 MySQL 可达 + Nacos 配置发布完成
 x-test-dependencies: &test-dependencies
   middleware-ready:
     condition: service_completed_successfully
@@ -53,7 +55,7 @@ services:
     command:
       - |
         set -e
-        for target in mysql:3306 redis:6379 nacos:8848; do
+        for target in mysql-test:3306 redis:6379 nacos:8848; do
           host=$${target%:*}
           port=$${target#*:}
           until nc -z "$$host" "$$port"; do
@@ -61,7 +63,7 @@ services:
             sleep 2
           done
         done
-        echo "shared middleware ready"
+        echo "test mysql and shared middleware ready"
     networks:
       - default
       - mw
@@ -88,6 +90,83 @@ services:
     depends_on:
       middleware-ready:
         condition: service_completed_successfully
+
+  # 一次性 Flyway 迁移任务：使用迁移账号，在业务容器启动前完成建表/迁移。
+  db-migrate-user:
+    image: ghcr.io/take-fish/tf-user:${TF_TEST_USER_TAG:-test}
+    container_name: fm-test-db-migrate-user
+    restart: "no"
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql-test}"
+      MYSQL_PORT: "${TEST_MYSQL_PORT:-3306}"
+      MYSQL_DB: fm_test_user
+      MYSQL_MIGRATE_USER: "${TEST_FM_USER_DB_MIGRATE_USER:-fm_test_user_migrate}"
+      MYSQL_MIGRATE_PASSWORD: "${TEST_FM_USER_DB_MIGRATE_PASSWORD:-}"
+      FLYWAY_LOCATIONS: classpath:db/migration
+    entrypoint: ["java"]
+    command:
+      - "-Dloader.main=com.fishmatrix.user.migration.DatabaseMigrator"
+      - "-cp"
+      - "/app/app.jar"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    depends_on:
+      middleware-ready:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - mw
+
+  db-migrate-chat:
+    image: ghcr.io/take-fish/tf-chat:${TF_TEST_CHAT_TAG:-test}
+    container_name: fm-test-db-migrate-chat
+    restart: "no"
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql-test}"
+      MYSQL_PORT: "${TEST_MYSQL_PORT:-3306}"
+      MYSQL_DB: fm_test_chat
+      MYSQL_MIGRATE_USER: "${TEST_FM_CHAT_DB_MIGRATE_USER:-fm_test_chat_migrate}"
+      MYSQL_MIGRATE_PASSWORD: "${TEST_FM_CHAT_DB_MIGRATE_PASSWORD:-}"
+      FLYWAY_LOCATIONS: classpath:db/migration
+    entrypoint: ["java"]
+    command:
+      - "-Dloader.main=com.fishmatrix.chat.migration.DatabaseMigrator"
+      - "-cp"
+      - "/app/app.jar"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    depends_on:
+      middleware-ready:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - mw
+
+  db-migrate-reader:
+    image: ghcr.io/take-fish/tf-reader:${TF_TEST_READER_TAG:-test}
+    container_name: fm-test-db-migrate-reader
+    restart: "no"
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql-test}"
+      MYSQL_PORT: "${TEST_MYSQL_PORT:-3306}"
+      MYSQL_DB: fm_test_reader
+      MYSQL_MIGRATE_USER: "${TEST_FM_READER_DB_MIGRATE_USER:-fm_test_reader_migrate}"
+      MYSQL_MIGRATE_PASSWORD: "${TEST_FM_READER_DB_MIGRATE_PASSWORD:-}"
+      # 演示书籍只在测试环境由测试 seed 写入，生产迁移目录不含 seed
+      FLYWAY_LOCATIONS: "classpath:db/migration,classpath:db/testdata"
+    entrypoint: ["java"]
+    command:
+      - "-Dloader.main=com.fishmatrix.reader.migration.DatabaseMigrator"
+      - "-cp"
+      - "/app/app.jar"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    depends_on:
+      middleware-ready:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - mw
 
   gateway:
     image: ghcr.io/take-fish/tf-gateway:${TF_TEST_GATEWAY_TAG:-test}
@@ -123,10 +202,17 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_user
+      MYSQL_APP_USER: "${TEST_FM_USER_DB_USER:-fm_test_user_app}"
+      MYSQL_APP_PASSWORD: "${TEST_FM_USER_DB_PASSWORD:-}"
       # 测试管理员与生产密码隔离（TEST_USER_ADMIN_PASSWORD 由脚本生成到 .env）
       USER_ADMIN_USERNAME: ${USER_ADMIN_USERNAME:-admin}
       USER_ADMIN_PASSWORD: ${TEST_USER_ADMIN_PASSWORD:-}
-    depends_on: *test-dependencies
+      # 测试环境允许显式创建/同步管理员；生产默认关闭
+      USER_ADMIN_SEED_ENABLED: "true"
+    depends_on:
+      <<: *test-dependencies
+      db-migrate-user:
+        condition: service_completed_successfully
     ports:
       - "${TEST_USER_PORT:-18101}:8101"
     networks:
@@ -140,9 +226,14 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_chat
+      MYSQL_APP_USER: "${TEST_FM_CHAT_DB_USER:-fm_test_chat_app}"
+      MYSQL_APP_PASSWORD: "${TEST_FM_CHAT_DB_PASSWORD:-}"
     volumes:
       - chat-test-images:/app/data/chat-images
-    depends_on: *test-dependencies
+    depends_on:
+      <<: *test-dependencies
+      db-migrate-chat:
+        condition: service_completed_successfully
     ports:
       - "${TEST_CHAT_PORT:-18102}:8102"
     networks:
@@ -156,7 +247,12 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_reader
-    depends_on: *test-dependencies
+      MYSQL_APP_USER: "${TEST_FM_READER_DB_USER:-fm_test_reader_app}"
+      MYSQL_APP_PASSWORD: "${TEST_FM_READER_DB_PASSWORD:-}"
+    depends_on:
+      <<: *test-dependencies
+      db-migrate-reader:
+        condition: service_completed_successfully
     ports:
       - "${TEST_READER_PORT:-18103}:8103"
     networks:
@@ -170,6 +266,8 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_game
+      MYSQL_APP_USER: "${TEST_FM_GAME_DB_USER:-fm_test_game_app}"
+      MYSQL_APP_PASSWORD: "${TEST_FM_GAME_DB_PASSWORD:-}"
     depends_on: *test-dependencies
     ports:
       - "${TEST_GAME_PORT:-18104}:8104"
@@ -184,6 +282,8 @@ services:
     environment:
       <<: *test-service-env
       MYSQL_DB: fm_test_music
+      MYSQL_APP_USER: "${TEST_FM_MUSIC_DB_USER:-fm_test_music_app}"
+      MYSQL_APP_PASSWORD: "${TEST_FM_MUSIC_DB_PASSWORD:-}"
     depends_on: *test-dependencies
     ports:
       - "${TEST_MUSIC_PORT:-18105}:8105"

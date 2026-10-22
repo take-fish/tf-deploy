@@ -67,6 +67,8 @@ EOF
   log "镜像已更新：ghcr.io/take-fish/tf-web:test"
 }
 
+MIGRATE_SERVICES=()
+
 for svc in "${SERVICES[@]}"; do
   if [ "$svc" = "web" ]; then
     build_web
@@ -97,7 +99,16 @@ COPY app.jar /app/app.jar
 EOF
   docker build --platform linux/amd64 -t "ghcr.io/take-fish/tf-$svc:test" "$ctx"
   log "镜像已更新：ghcr.io/take-fish/tf-$svc:test"
+
+  case "$svc" in
+    user|chat|reader) MIGRATE_SERVICES+=("db-migrate-$svc") ;;
+  esac
 done
+
+if [ "${#MIGRATE_SERVICES[@]}" -gt 0 ]; then
+  log "执行数据库迁移：${MIGRATE_SERVICES[*]}"
+  (cd "$REPO_DIR" && docker compose -f docker-compose.test.yml up --force-recreate "${MIGRATE_SERVICES[@]}")
+fi
 
 log "重建测试服务：${SERVICES[*]}"
 (cd "$REPO_DIR" && docker compose -f docker-compose.test.yml up -d --no-deps --force-recreate "${SERVICES[@]}")
