@@ -1,16 +1,17 @@
-# FishMatrix 独立中间件编排（生产/测试共用）
+# FishMatrix 独立中间件编排（生产/测试 MySQL 物理隔离）
 #
 # 只运行 MySQL / Redis / Elasticsearch / Nacos，不包含任何业务应用。
-# 生产与测试应用分别运行自己的容器，但都连接这套中间件地址：
-#   - 生产：fm_user / fm_chat ...，Redis DB0，Nacos namespace=fm-prod
-#   - 测试：fm_test_user / fm_test_chat ...，Redis DB1，Nacos namespace=fm-test
+# MySQL 使用两个独立实例：
+#   - 生产：fm-mysql（mysql），库 fm_*，Redis DB0，Nacos namespace=fm-prod
+#   - 测试：fm-test-mysql（mysql-test），库 fm_test_*，Redis DB1，Nacos namespace=fm-test
+# Redis / Nacos 仍为共享实例，通过 DB / namespace 逻辑隔离。
 #
 # 用法（在 tf-deploy 目录）：
-#   docker compose -f docker-compose.middleware.yml up -d mysql redis nacos
+#   docker compose -f docker-compose.middleware.yml up -d mysql mysql-test redis nacos
 #   docker compose -f docker-compose.middleware.yml ps
 #
 # Elasticsearch 已定义但当前未启用；需要时再单独 `up -d elasticsearch`。
-# 数据卷沿用原生产卷（显式 name），切换时不会丢数据。
+# 数据卷沿用原生产卷（显式 name），切换时不会丢数据；测试实例使用独立数据卷。
 name: fishmatrix-middleware
 
 services:
@@ -20,10 +21,6 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fishmatrix}
-      MYSQL_APP_USER: ${MYSQL_APP_USER:-fm_app}
-      MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:-}
-      MYSQL_TEST_APP_USER: ${TEST_MYSQL_APP_USER:-fm_test_app}
-      MYSQL_TEST_APP_PASSWORD: ${TEST_MYSQL_APP_PASSWORD:-}
       TZ: Asia/Shanghai
     ports:
       # 宿主 3306 被原生 MySQL 占用，Docker 发布到 13306；
@@ -31,7 +28,7 @@ services:
       - "${MYSQL_HOST_PORT:-13306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      # 仅首次初始化时执行：生产库 + 测试库 + 两套账号
+      # 仅首次初始化时执行：只创建生产库；账号由 scripts/init-db.sh 创建
       - ./scripts/mysql-middleware-init.sh:/docker-entrypoint-initdb.d/10-fm-middleware-init.sh:ro
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
@@ -43,6 +40,36 @@ services:
     networks:
       default:
         aliases: [mysql, fm-mysql]
+
+  mysql-test:
+    image: mysql:8.4
+    container_name: fm-test-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TEST_MYSQL_ROOT_PASSWORD:?TEST_MYSQL_ROOT_PASSWORD 未配置}
+      TZ: Asia/Shanghai
+    ports:
+      # 测试实例独立端口，绝不与生产 13306 混用。
+      - "${TEST_MYSQL_HOST_PORT:-13307}:3306"
+    volumes:
+      - test-mysql-data:/var/lib/mysql
+      # 仅首次初始化时执行：只创建 fm_test_* 库；账号由 scripts/init-test-db.sh 创建
+      - ./scripts/mysql-test-init.sh:/docker-entrypoint-initdb.d/10-fm-test-init.sh:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max-connections=80
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          # 与生产实例同机时限制测试实例，避免导入/重建拖垮生产。
+          memory: 1g
+    networks:
+      default:
+        aliases: [mysql-test, fm-test-mysql]
 
   redis:
     image: redis:7-alpine
@@ -108,6 +135,8 @@ services:
 volumes:
   mysql-data:
     name: fishmatrix_mysql-data
+  test-mysql-data:
+    name: fishmatrix_test-mysql-data
   redis-data:
     name: fishmatrix_redis-data
   es-data:

@@ -3,7 +3,7 @@
 spring:
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:fm_music}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${MYSQL_APP_USER:fm_app}
+    username: ${MYSQL_APP_USER:fm_music_app}
     password: ${MYSQL_APP_PASSWORD:}
   data:
     redis:
