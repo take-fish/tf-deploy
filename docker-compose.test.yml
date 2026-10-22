@@ -187,11 +187,11 @@ services:
       GATEWAY_DISCOVERY_ENABLED: ${GATEWAY_DISCOVERY_ENABLED:-true}
       # 静态地址仅作 Nacos 发现失败时的兜底；必须使用环境唯一容器名，
       # 不能用 compose 服务名（生产/测试共用 mw 网络时会串到另一环境）。
-      TF_USER_URL: http://fm-test-user:8101
-      TF_CHAT_URL: http://fm-test-chat:8102
-      TF_READER_URL: http://fm-test-reader:8103
-      TF_GAME_URL: http://fm-test-game:8104
-      TF_MUSIC_URL: http://fm-test-music:8105
+      TF_USER_URL: ${TEST_USER_URL:-http://fm-test-user:8101}
+      TF_CHAT_URL: ${TEST_CHAT_URL:-http://fm-test-chat:8102}
+      TF_READER_URL: ${TEST_READER_URL:-http://fm-test-reader:8103}
+      TF_GAME_URL: ${TEST_GAME_URL:-http://fm-test-game:8104}
+      TF_MUSIC_URL: ${TEST_MUSIC_URL:-http://fm-test-music:8105}
     ports:
       - "${TEST_GATEWAY_PORT:-18080}:8080"
     networks:
@@ -244,7 +244,7 @@ services:
       MYSQL_APP_USER: "${TEST_FM_CHAT_DB_USER:-fm_test_chat_app}"
       MYSQL_APP_PASSWORD: "${TEST_FM_CHAT_DB_PASSWORD:-}"
       # 生产/测试共用 mw 网络时不能用服务名 user（会解析到生产用户服务）
-      TF_USER_URL: "${TEST_TF_USER_URL:-http://fm-test-user:8101}"
+      TF_USER_URL: "${TEST_USER_URL:-http://fm-test-user:8101}"
     volumes:
       - chat-test-images:/app/data/chat-images
     depends_on:
