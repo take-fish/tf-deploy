@@ -36,6 +36,7 @@ x-test-service-env: &test-service-env
   # 业务容器不建表、不写 seed；Flyway 由独立迁移 Job 执行
   SQL_INIT_MODE: never
   SPRING_FLYWAY_ENABLED: "false"
+  APP_ENV: test
   APP_VERSION: ${TEST_APP_VERSION:-test}
   GIT_COMMIT: ${TEST_GIT_COMMIT:-unknown}
   <<: *test-middleware
@@ -185,11 +186,13 @@ services:
       GATEWAY_CONFIG_GROUP: FM
       GATEWAY_DISCOVERY_GROUP: DEFAULT_GROUP
       GATEWAY_DISCOVERY_ENABLED: ${GATEWAY_DISCOVERY_ENABLED:-true}
-      TF_USER_URL: http://user:8101
-      TF_CHAT_URL: http://chat:8102
-      TF_READER_URL: http://reader:8103
-      TF_GAME_URL: http://game:8104
-      TF_MUSIC_URL: http://music:8105
+      # 静态地址仅作 Nacos 发现失败时的兜底；必须使用环境唯一容器名，
+      # 不能用 compose 服务名（生产/测试共用 mw 网络时会串到另一环境）。
+      TF_USER_URL: ${TEST_USER_URL:-http://fm-test-user:8101}
+      TF_CHAT_URL: ${TEST_CHAT_URL:-http://fm-test-chat:8102}
+      TF_READER_URL: ${TEST_READER_URL:-http://fm-test-reader:8103}
+      TF_GAME_URL: ${TEST_GAME_URL:-http://fm-test-game:8104}
+      TF_MUSIC_URL: ${TEST_MUSIC_URL:-http://fm-test-music:8105}
     ports:
       - "${TEST_GATEWAY_PORT:-18080}:8080"
     networks:
@@ -241,6 +244,8 @@ services:
       MYSQL_DB: fm_test_chat
       MYSQL_APP_USER: "${TEST_FM_CHAT_DB_USER:-fm_test_chat_app}"
       MYSQL_APP_PASSWORD: "${TEST_FM_CHAT_DB_PASSWORD:-}"
+      # 生产/测试共用 mw 网络时不能用服务名 user（会解析到生产用户服务）
+      TF_USER_URL: "${TEST_USER_URL:-http://fm-test-user:8101}"
     volumes:
       - chat-test-images:/app/data/chat-images
     depends_on:
