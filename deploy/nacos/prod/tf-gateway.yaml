@@ -1,0 +1,50 @@
+version: 1
+
+gateway:
+  discovery:
+    enabled: true
+    group: DEFAULT_GROUP
+    clusters:
+      - DEFAULT
+    cache-ttl-seconds: 10
+    refresh-interval-seconds: 10
+    fallback-enabled: true
+
+  http:
+    connect-timeout-ms: 2000
+    response-header-timeout-ms: 30000
+    idle-conn-timeout-ms: 90000
+
+  retry:
+    enabled: true
+    max-attempts: 2
+    methods:
+      - GET
+      - HEAD
+      - OPTIONS
+
+  routes:
+    - id: user
+      prefix: /api/v1/user
+      service: tf-user
+
+    - id: chat
+      prefix: /api/v1/chat
+      service: tf-chat
+
+    - id: chat-ws
+      path: /ws/chat
+      service: tf-chat
+      websocket: true
+
+    - id: reader
+      prefix: /api/v1/reader
+      service: tf-reader
+
+    - id: game
+      prefix: /api/v1/game
+      service: tf-game
+
+    - id: music
+      prefix: /api/v1/music
+      service: tf-music

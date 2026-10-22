@@ -1,4 +1,6 @@
 .env
+backups/
+.fm-test-migrated-images
 .idea/
 .vscode/
 *.log
