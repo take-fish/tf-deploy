@@ -26,11 +26,13 @@ services:
       GATEWAY_CONFIG_GROUP: FM
       GATEWAY_DISCOVERY_GROUP: DEFAULT_GROUP
       GATEWAY_DISCOVERY_ENABLED: ${GATEWAY_DISCOVERY_ENABLED:-true}
-      TF_CHAT_URL: ${TF_CHAT_URL:-http://chat:8102}
-      TF_READER_URL: ${TF_READER_URL:-http://reader:8103}
-      TF_GAME_URL: ${TF_GAME_URL:-http://game:8104}
-      TF_MUSIC_URL: ${TF_MUSIC_URL:-http://music:8105}
-      TF_USER_URL: ${TF_USER_URL:-http://user:8101}
+      # 静态地址仅作 Nacos 发现失败时的兜底；必须使用环境唯一容器名，
+      # 不能用 compose 服务名（生产/测试共用 mw 网络时会串到另一环境）。
+      TF_CHAT_URL: ${TF_CHAT_URL:-http://fm-chat:8102}
+      TF_READER_URL: ${TF_READER_URL:-http://fm-reader:8103}
+      TF_GAME_URL: ${TF_GAME_URL:-http://fm-game:8104}
+      TF_MUSIC_URL: ${TF_MUSIC_URL:-http://fm-music:8105}
+      TF_USER_URL: ${TF_USER_URL:-http://fm-prod-user:8101}
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     networks:

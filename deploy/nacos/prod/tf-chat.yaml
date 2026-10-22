@@ -24,8 +24,8 @@ app:
     offline-limit: 200
     max-content-length: 2000
     max-nickname-length: 32
-    # 与用户服务同 compose 网络时使用服务名；分机部署可用 TF_USER_URL 覆盖
-    user-service-url: ${TF_USER_URL:http://user:8101}
+    # 生产/测试共用 mw 网络，必须用环境唯一地址；分机部署可用 TF_USER_URL 覆盖
+    user-service-url: ${TF_USER_URL:http://fm-prod-user:8101}
     ws-ticket-ttl-seconds: ${CHAT_WS_TICKET_TTL_SECONDS:60}
     auth-cache-ttl-seconds: ${CHAT_AUTH_CACHE_TTL_SECONDS:60}
     recall-window-seconds: ${CHAT_RECALL_WINDOW_SECONDS:120}

@@ -53,8 +53,14 @@ services:
     ports:
       - "${USER_PORT:-8101}:8101"
     networks:
-      - default
-      - mw
+      default:
+        # 与测试栈共用 fishmatrix-mw 时，compose 服务名 user 会冲突；
+        # 生产内部调用统一使用该环境唯一别名。
+        aliases:
+          - fm-prod-user
+      mw:
+        aliases:
+          - fm-prod-user
 
   chat:
     image: ghcr.io/take-fish/tf-chat:${TF_CHAT_TAG:-latest}
@@ -65,6 +71,8 @@ services:
       MYSQL_DB: fm_chat
       MYSQL_APP_USER: ${FM_CHAT_DB_USER:-fm_chat_app}
       MYSQL_APP_PASSWORD: ${FM_CHAT_DB_PASSWORD:-}
+      # 生产/测试共用 mw 网络时不能用服务名 user（会解析到测试用户服务）
+      TF_USER_URL: ${TF_USER_URL:-http://fm-prod-user:8101}
     volumes:
       - chat-images:/app/data/chat-images
     ports:

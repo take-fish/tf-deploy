@@ -24,8 +24,8 @@ app:
     offline-limit: 200
     max-content-length: 2000
     max-nickname-length: 32
-    # 测试栈内通过 compose 服务名访问用户服务，校验聊天 Bearer token
-    user-service-url: ${TF_USER_URL:http://user:8101}
+    # 生产/测试共用 mw 网络，必须用环境唯一地址；分机部署可用 TF_USER_URL 覆盖
+    user-service-url: ${TF_USER_URL:http://fm-test-user:8101}
     ws-ticket-ttl-seconds: ${CHAT_WS_TICKET_TTL_SECONDS:60}
     auth-cache-ttl-seconds: ${CHAT_AUTH_CACHE_TTL_SECONDS:60}
     recall-window-seconds: ${CHAT_RECALL_WINDOW_SECONDS:120}
