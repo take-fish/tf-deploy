@@ -10,3 +10,22 @@ spring:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:1}
+
+fm:
+  # 统一鉴权：网关签名头优先；直连调试可用 Bearer 回退到测试用户服务
+  auth:
+    enabled: ${FM_AUTH_ENABLED:true}
+    user-service-url: ${TF_USER_URL:http://fm-test-user:8101}
+    identity-secret: ${FM_IDENTITY_SECRET:}
+    allow-bearer-fallback: ${FM_AUTH_BEARER_FALLBACK:true}
+    cache-ttl: ${FM_AUTH_CACHE_TTL:30s}
+  messaging:
+    enabled: ${FM_MESSAGING_ENABLED:false}
+    log-events: ${FM_MESSAGING_LOG_EVENTS:false}
+    name-server: ${ROCKETMQ_NAME_SERVER:}
+    topic-prefix: ${FM_TOPIC_PREFIX:FM_}
+  rpc:
+    enabled: ${FM_RPC_ENABLED:false}
+    nacos-namespace: ${NACOS_NAMESPACE:fm-test}
+    group: ${FM_RPC_GROUP:FM}
+    timeout-ms: ${FM_RPC_TIMEOUT_MS:3000}

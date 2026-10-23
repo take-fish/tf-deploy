@@ -39,6 +39,13 @@ x-test-service-env: &test-service-env
   APP_ENV: test
   APP_VERSION: ${TEST_APP_VERSION:-test}
   GIT_COMMIT: ${TEST_GIT_COMMIT:-unknown}
+  # 网关签发的身份头共用同一 HMAC 密钥；测试与生产必须使用不同密钥
+  FM_IDENTITY_SECRET: ${TEST_FM_IDENTITY_SECRET:-}
+  # 直连调试回退校验 Bearer 时使用测试唯一容器名，避免命中生产用户服务
+  TF_USER_URL: ${TEST_USER_URL:-http://fm-test-user:8101}
+  # 书籍/音频原文落测试专用卷
+  FM_STORAGE_ENABLED: "true"
+  FM_STORAGE_BASE_DIR: ${TEST_FM_STORAGE_BASE_DIR:-/app/data/files}
   <<: *test-middleware
 
 # 应用服务等待测试 MySQL 可达 + Nacos 配置发布完成
@@ -171,6 +178,31 @@ services:
       - default
       - mw
 
+  db-migrate-music:
+    image: ghcr.io/take-fish/tf-music:${TF_TEST_MUSIC_TAG:-test}
+    container_name: fm-test-db-migrate-music
+    restart: "no"
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql-test}"
+      MYSQL_PORT: "${TEST_MYSQL_PORT:-3306}"
+      MYSQL_DB: fm_test_music
+      MYSQL_MIGRATE_USER: "${TEST_FM_MUSIC_DB_MIGRATE_USER:-fm_test_music_migrate}"
+      MYSQL_MIGRATE_PASSWORD: "${TEST_FM_MUSIC_DB_MIGRATE_PASSWORD:-}"
+      FLYWAY_LOCATIONS: classpath:db/migration
+    entrypoint: ["java"]
+    command:
+      - "-Dloader.main=com.fishmatrix.music.migration.DatabaseMigrator"
+      - "-cp"
+      - "/app/app.jar"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    depends_on:
+      middleware-ready:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - mw
+
   gateway:
     image: ghcr.io/take-fish/tf-gateway:${TF_TEST_GATEWAY_TAG:-test}
     container_name: fm-test-gateway
@@ -180,6 +212,8 @@ services:
       PORT: "8080"
       # 测试栈必须显式标记环境，否则网关默认写入 production，日志检索按 env 过滤会串环境。
       APP_ENV: test
+      # 与测试业务服务保持同一 HMAC 密钥，网关注入的身份头才会被接受
+      FM_IDENTITY_SECRET: ${TEST_FM_IDENTITY_SECRET:-}
       NACOS_ADDR: ${TEST_NACOS_ADDR:-nacos:8848}
       NACOS_NAMESPACE: fm-test
       GATEWAY_NACOS_USERNAME: ${TEST_GATEWAY_NACOS_USERNAME:-fm-gateway-ro-test}
@@ -246,8 +280,6 @@ services:
       MYSQL_DB: fm_test_chat
       MYSQL_APP_USER: "${TEST_FM_CHAT_DB_USER:-fm_test_chat_app}"
       MYSQL_APP_PASSWORD: "${TEST_FM_CHAT_DB_PASSWORD:-}"
-      # 生产/测试共用 mw 网络时不能用服务名 user（会解析到生产用户服务）
-      TF_USER_URL: "${TEST_USER_URL:-http://fm-test-user:8101}"
     volumes:
       - chat-test-images:/app/data/chat-images
     depends_on:
@@ -269,6 +301,8 @@ services:
       MYSQL_DB: fm_test_reader
       MYSQL_APP_USER: "${TEST_FM_READER_DB_USER:-fm_test_reader_app}"
       MYSQL_APP_PASSWORD: "${TEST_FM_READER_DB_PASSWORD:-}"
+    volumes:
+      - reader-test-files:/app/data/files
     depends_on:
       <<: *test-dependencies
       db-migrate-reader:
@@ -304,7 +338,12 @@ services:
       MYSQL_DB: fm_test_music
       MYSQL_APP_USER: "${TEST_FM_MUSIC_DB_USER:-fm_test_music_app}"
       MYSQL_APP_PASSWORD: "${TEST_FM_MUSIC_DB_PASSWORD:-}"
-    depends_on: *test-dependencies
+    volumes:
+      - music-test-files:/app/data/files
+    depends_on:
+      <<: *test-dependencies
+      db-migrate-music:
+        condition: service_completed_successfully
     ports:
       - "${TEST_MUSIC_PORT:-18105}:8105"
     networks:
@@ -313,6 +352,8 @@ services:
 
 volumes:
   chat-test-images:
+  reader-test-files:
+  music-test-files:
 
 networks:
   default:
