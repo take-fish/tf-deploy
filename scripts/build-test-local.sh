@@ -138,7 +138,7 @@ EOF
   log "镜像已更新：ghcr.io/take-fish/tf-$svc:test"
 
   case "$svc" in
-    user|chat|reader) MIGRATE_SERVICES+=("db-migrate-$svc") ;;
+    user|chat|reader|music) MIGRATE_SERVICES+=("db-migrate-$svc") ;;
   esac
 done
 

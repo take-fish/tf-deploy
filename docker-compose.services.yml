@@ -35,6 +35,13 @@ x-service-env: &service-env
   GIT_COMMIT: ${GIT_COMMIT:-unknown}
   SQL_INIT_MODE: ${SQL_INIT_MODE:-never}
   SPRING_FLYWAY_ENABLED: "false"
+  # 网关签发的身份头共用同一 HMAC 密钥（生产与测试必须不同）
+  FM_IDENTITY_SECRET: ${FM_IDENTITY_SECRET:-}
+  # 直连调试回退校验 Bearer 时使用生产唯一别名，避免命中测试用户服务
+  TF_USER_URL: ${TF_USER_URL:-http://fm-prod-user:8101}
+  # 书籍/音频原文落本地卷，数据库只保存元数据与 storage_key
+  FM_STORAGE_ENABLED: "true"
+  FM_STORAGE_BASE_DIR: ${FM_STORAGE_BASE_DIR:-/app/data/files}
 
 services:
   user:
@@ -72,8 +79,6 @@ services:
       MYSQL_DB: fm_chat
       MYSQL_APP_USER: ${FM_CHAT_DB_USER:-fm_chat_app}
       MYSQL_APP_PASSWORD: ${FM_CHAT_DB_PASSWORD:-}
-      # 生产/测试共用 mw 网络时不能用服务名 user（会解析到测试用户服务）
-      TF_USER_URL: ${TF_USER_URL:-http://fm-prod-user:8101}
     volumes:
       - chat-images:/app/data/chat-images
     ports:
@@ -91,6 +96,8 @@ services:
       MYSQL_DB: fm_reader
       MYSQL_APP_USER: ${FM_READER_DB_USER:-fm_reader_app}
       MYSQL_APP_PASSWORD: ${FM_READER_DB_PASSWORD:-}
+    volumes:
+      - reader-files:/app/data/files
     ports:
       - "${READER_PORT:-8103}:8103"
     networks:
@@ -121,6 +128,8 @@ services:
       MYSQL_DB: fm_music
       MYSQL_APP_USER: ${FM_MUSIC_DB_USER:-fm_music_app}
       MYSQL_APP_PASSWORD: ${FM_MUSIC_DB_PASSWORD:-}
+    volumes:
+      - music-files:/app/data/files
     ports:
       - "${MUSIC_PORT:-8105}:8105"
     networks:
@@ -129,6 +138,8 @@ services:
 
 volumes:
   chat-images:
+  reader-files:
+  music-files:
 
 networks:
   # 共享中间件网络（由 docker-compose.middleware.yml 创建）
