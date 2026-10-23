@@ -4,11 +4,11 @@
 # 部署顺序：
 #   1. 备份生产 MySQL：bash scripts/backup-mysql.sh prod
 #   2. 执行迁移：docker compose -f docker-compose.migrate.yml run --rm migrate-user
-#      （chat/reader 同理）
+#      （chat/reader/music 同理）
 #   3. 启动/更新业务容器：docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
 #
 # 迁移文件随服务镜像发布，不使用宿主机挂载，避免与镜像版本脱节。
-# game / music 当前没有表结构，不创建无意义的迁移。
+# game 当前没有表结构，不创建无意义的迁移。
 name: fishmatrix
 
 x-migrate-env: &migrate-env
@@ -66,6 +66,24 @@ services:
     entrypoint: ["java"]
     command:
       - "-Dloader.main=com.fishmatrix.reader.migration.DatabaseMigrator"
+      - "-cp"
+      - "/app/app.jar"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    networks:
+      - mw
+
+  migrate-music:
+    image: ghcr.io/take-fish/tf-music:${TF_MUSIC_TAG:-latest}
+    container_name: fm-db-migrate-music
+    restart: "no"
+    environment:
+      <<: *migrate-env
+      MYSQL_DB: fm_music
+      MYSQL_MIGRATE_USER: ${FM_MUSIC_DB_MIGRATE_USER:-fm_music_migrate}
+      MYSQL_MIGRATE_PASSWORD: ${FM_MUSIC_DB_MIGRATE_PASSWORD:-}
+    entrypoint: ["java"]
+    command:
+      - "-Dloader.main=com.fishmatrix.music.migration.DatabaseMigrator"
       - "-cp"
       - "/app/app.jar"
       - "org.springframework.boot.loader.launch.PropertiesLauncher"
