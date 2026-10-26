@@ -58,6 +58,8 @@ services:
       USER_ADMIN_PASSWORD: ${USER_ADMIN_PASSWORD:-}
       # 生产默认不在每次启动时静默同步管理员密码；首次初始化/轮换时显式开启
       USER_ADMIN_SEED_ENABLED: ${USER_ADMIN_SEED_ENABLED:-false}
+    volumes:
+      - user-files:/app/data/files
     ports:
       - "${USER_PORT:-8101}:8101"
     networks:
@@ -140,6 +142,7 @@ volumes:
   chat-images:
   reader-files:
   music-files:
+  user-files:
 
 networks:
   # 共享中间件网络（由 docker-compose.middleware.yml 创建）
