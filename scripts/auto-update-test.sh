@@ -18,8 +18,8 @@ COMPOSE_FILES=(-f docker-compose.test.yml)
 # 测试栈内的应用服务
 APP_SERVICES=(gateway web user chat reader game music)
 # 需要先执行 Flyway 迁移的数据库服务与对应一次性任务
-MIGRATE_SERVICES=(user chat reader)
-MIGRATE_JOBS=(db-migrate-user db-migrate-chat db-migrate-reader)
+MIGRATE_SERVICES=(user chat reader game)
+MIGRATE_JOBS=(db-migrate-user db-migrate-chat db-migrate-reader db-migrate-game)
 MIGRATE_MARKER="$REPO_DIR/.fm-test-migrated-images"
 
 log() { echo "[fm-auto-update-test] $(date '+%F %T') $*"; }

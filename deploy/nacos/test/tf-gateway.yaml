@@ -37,6 +37,11 @@ gateway:
       service: tf-chat
       websocket: true
 
+    - id: game-ws
+      path: /ws/game
+      service: tf-game
+      websocket: true
+
     - id: reader
       prefix: /api/v1/reader
       service: tf-reader
