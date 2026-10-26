@@ -286,6 +286,8 @@ services:
       USER_ADMIN_PASSWORD: ${TEST_USER_ADMIN_PASSWORD:-}
       # 测试环境允许显式创建/同步管理员；生产默认关闭
       USER_ADMIN_SEED_ENABLED: "true"
+    volumes:
+      - user-test-files:/app/data/files
     depends_on:
       <<: *test-dependencies
       db-migrate-user:
@@ -382,6 +384,7 @@ volumes:
   chat-test-images:
   reader-test-files:
   music-test-files:
+  user-test-files:
 
 networks:
   default:
