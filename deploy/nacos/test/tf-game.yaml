@@ -11,6 +11,13 @@ spring:
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:1}
 
+app:
+  environment: ${APP_ENV:test}
+  game:
+    # 邀请超时、休息、走子与断线判负由应用默认值控制，可用环境变量覆盖
+    scheduling-enabled: ${GAME_SCHEDULING_ENABLED:true}
+    allowed-origins: ${GAME_ALLOWED_ORIGINS:*}
+
 fm:
   # 统一鉴权：网关签名头优先；直连调试可用 Bearer 回退到测试用户服务
   auth:
