@@ -11,6 +11,12 @@ spring:
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:0}
 
+app:
+  environment: ${APP_ENV:production}
+  game:
+    scheduling-enabled: ${GAME_SCHEDULING_ENABLED:true}
+    allowed-origins: ${GAME_ALLOWED_ORIGINS:*}
+
 fm:
   # 统一鉴权：网关签名头优先；直连调试可用 Bearer 回退到生产用户服务
   auth:

@@ -11,7 +11,7 @@
 #   bash scripts/ensure-test-secrets.sh
 #   docker compose -f docker-compose.middleware.yml up -d mysql-test redis nacos
 #   bash scripts/init-test-db.sh
-#   bash scripts/build-test-local.sh user chat reader
+#   bash scripts/build-test-local.sh user chat reader game
 #   docker compose -f docker-compose.test.yml up -d
 #   docker compose -f docker-compose.test.yml ps -a
 name: fishmatrix-test
@@ -178,6 +178,31 @@ services:
       - default
       - mw
 
+  db-migrate-game:
+    image: ghcr.io/take-fish/tf-game:${TF_TEST_GAME_TAG:-test}
+    container_name: fm-test-db-migrate-game
+    restart: "no"
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_HOST: "${TEST_MYSQL_HOST:-mysql-test}"
+      MYSQL_PORT: "${TEST_MYSQL_PORT:-3306}"
+      MYSQL_DB: fm_test_game
+      MYSQL_MIGRATE_USER: "${TEST_FM_GAME_DB_MIGRATE_USER:-fm_test_game_migrate}"
+      MYSQL_MIGRATE_PASSWORD: "${TEST_FM_GAME_DB_MIGRATE_PASSWORD:-}"
+      FLYWAY_LOCATIONS: classpath:db/migration
+    entrypoint: ["java"]
+    command:
+      - "-Dloader.main=com.fishmatrix.game.migration.DatabaseMigrator"
+      - "-cp"
+      - "/app/app.jar"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    depends_on:
+      middleware-ready:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - mw
+
   db-migrate-music:
     image: ghcr.io/take-fish/tf-music:${TF_TEST_MUSIC_TAG:-test}
     container_name: fm-test-db-migrate-music
@@ -322,7 +347,10 @@ services:
       MYSQL_DB: fm_test_game
       MYSQL_APP_USER: "${TEST_FM_GAME_DB_USER:-fm_test_game_app}"
       MYSQL_APP_PASSWORD: "${TEST_FM_GAME_DB_PASSWORD:-}"
-    depends_on: *test-dependencies
+    depends_on:
+      <<: *test-dependencies
+      db-migrate-game:
+        condition: service_completed_successfully
     ports:
       - "${TEST_GAME_PORT:-18104}:8104"
     networks:
