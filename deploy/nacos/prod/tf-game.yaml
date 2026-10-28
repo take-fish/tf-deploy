@@ -28,13 +28,13 @@ fm:
   # RocketMQ：生产/测试共享 broker，靠 topic 前缀（FM_ / FM_TEST_）
   # 与 producer group 前缀隔离。启用前确认 fm-rocketmq-broker 已就绪。
   messaging:
-    enabled: false
+    enabled: true
     log-events: false
     name-server: rocketmq-nameserver:9876
     topic-prefix: FM_
     producer-group: fm-game
     send-timeout-ms: 3000
-    diagnostics-on-startup: false
+    diagnostics-on-startup: true
   rpc:
     enabled: ${FM_RPC_ENABLED:false}
     nacos-namespace: ${NACOS_NAMESPACE:fm-prod}

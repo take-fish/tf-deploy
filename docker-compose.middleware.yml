@@ -242,7 +242,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 320m
+          # 实测稳态 278MiB：堆 256m 加 metaspace/线程栈后逼近 320m，
+          # 留出余量避免容器 OOM kill。
+          memory: 448m
     networks:
       default:
         aliases: [rocketmq-nameserver, fm-rocketmq-nameserver]
@@ -272,7 +274,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          # 实测稳态 842MiB：堆 768m 加堆外后接近 1g，放宽到 1.5g 留出 GC 与连接峰值余量。
+          memory: 1536m
     networks:
       default:
         aliases: [rocketmq-broker, fm-rocketmq-broker]
