@@ -65,7 +65,7 @@ services:
     command:
       - |
         set -e
-        for target in mysql-test:3306 redis:6379 nacos:8848; do
+        for target in mysql-test:3306 redis:6379 nacos:8848 rocketmq-nameserver:9876; do
           host=$${target%:*}
           port=$${target#*:}
           until nc -z "$$host" "$$port"; do
