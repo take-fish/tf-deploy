@@ -36,12 +36,12 @@ fm:
     enabled: ${FM_STORAGE_ENABLED:true}
     base-dir: ${FM_STORAGE_BASE_DIR:/app/data/files}
     max-file-bytes: ${FM_STORAGE_MAX_BYTES:8388608}
-  # 消息与 RPC 骨架：默认关闭，不连接任何中间件
-  # RocketMQ：与生产共享 broker，测试统一使用 FM_TEST_ 前缀。
-  # 服务升级到 tf-common 1.2.0 后，把 enabled 改为 true 即接入。
+  # 消息与 RPC 骨架：RPC 默认关闭；RocketMQ 仅测试栈启用。
+  # 与生产共享 broker，测试统一使用 FM_TEST_ 前缀。
+  # 已接入事件：READER_ACCESS_REQUESTED / READER_ACCESS_DECIDED（访问申请旁路事件）。
   messaging:
-    enabled: false
-    log-events: false
+    enabled: true
+    log-events: true
     name-server: rocketmq-nameserver:9876
     topic-prefix: FM_TEST_
     producer-group: fm-test-reader

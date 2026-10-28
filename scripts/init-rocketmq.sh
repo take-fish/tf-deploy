@@ -21,7 +21,13 @@ esac
 NAMESRV="rocketmq-nameserver:9876"
 CLUSTER="fishmatrix"
 BROKER_CONTAINER="fm-rocketmq-broker"
-TOPIC="${PREFIX}SYSTEM_PROBE"
+
+# 业务事件 topic 在此登记：新增事件类型时追加，重跑本脚本即可。
+TOPICS=(
+  "${PREFIX}SYSTEM_PROBE"
+  "${PREFIX}READER_ACCESS_REQUESTED"
+  "${PREFIX}READER_ACCESS_DECIDED"
+)
 
 if ! docker inspect -f '{{.State.Running}}' "$BROKER_CONTAINER" 2>/dev/null | grep -q true; then
   echo "RocketMQ broker 未运行，请先执行：" >&2
@@ -35,15 +41,19 @@ run_mqadmin() {
     -- "$@"
 }
 
-echo "预建 topic: $TOPIC (集群 $CLUSTER, nameserver $NAMESRV)"
-run_mqadmin updateTopic -n "$NAMESRV" -c "$CLUSTER" -t "$TOPIC"
+for topic in "${TOPICS[@]}"; do
+  echo "预建 topic: $topic (集群 $CLUSTER, nameserver $NAMESRV)"
+  run_mqadmin updateTopic -n "$NAMESRV" -c "$CLUSTER" -t "$topic"
+done
 
 echo "当前 topic 列表："
-TOPICS="$(run_mqadmin topicList -n "$NAMESRV" -c "$CLUSTER")"
-echo "$TOPICS"
+EXISTING="$(run_mqadmin topicList -n "$NAMESRV" -c "$CLUSTER")"
+echo "$EXISTING"
 
-if ! grep -qE "(^|[[:space:]])${TOPIC}[[:space:]]*$" <<< "$TOPICS"; then
-  echo "topic 校验失败：$TOPIC 不存在" >&2
-  exit 1
-fi
-echo "RocketMQ $ENV_NAME 环境 topic 就绪"
+for topic in "${TOPICS[@]}"; do
+  if ! grep -qE "(^|[[:space:]])${topic}[[:space:]]*$" <<< "$EXISTING"; then
+    echo "topic 校验失败：$topic 不存在" >&2
+    exit 1
+  fi
+done
+echo "RocketMQ $ENV_NAME 环境 topic 就绪（${#TOPICS[@]} 个）"
