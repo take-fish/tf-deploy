@@ -25,11 +25,16 @@ fm:
     base-dir: ${FM_STORAGE_BASE_DIR:/app/data/files}
     max-file-bytes: ${FM_STORAGE_MAX_BYTES:52428800}
   # 消息与 RPC 骨架：默认关闭，不连接任何中间件
+  # RocketMQ：生产/测试共享 broker，靠 topic 前缀（FM_ / FM_TEST_）
+  # 与 producer group 前缀隔离。启用前确认 fm-rocketmq-broker 已就绪。
   messaging:
-    enabled: ${FM_MESSAGING_ENABLED:false}
-    log-events: ${FM_MESSAGING_LOG_EVENTS:false}
-    name-server: ${ROCKETMQ_NAME_SERVER:}
-    topic-prefix: ${FM_TOPIC_PREFIX:FM_}
+    enabled: false
+    log-events: false
+    name-server: rocketmq-nameserver:9876
+    topic-prefix: FM_
+    producer-group: fm-music
+    send-timeout-ms: 3000
+    diagnostics-on-startup: false
   rpc:
     enabled: ${FM_RPC_ENABLED:false}
     nacos-namespace: ${NACOS_NAMESPACE:fm-prod}

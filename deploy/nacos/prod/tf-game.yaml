@@ -25,11 +25,16 @@ fm:
     identity-secret: ${FM_IDENTITY_SECRET:}
     allow-bearer-fallback: ${FM_AUTH_BEARER_FALLBACK:true}
     cache-ttl: ${FM_AUTH_CACHE_TTL:30s}
+  # RocketMQ：生产/测试共享 broker，靠 topic 前缀（FM_ / FM_TEST_）
+  # 与 producer group 前缀隔离。启用前确认 fm-rocketmq-broker 已就绪。
   messaging:
-    enabled: ${FM_MESSAGING_ENABLED:false}
-    log-events: ${FM_MESSAGING_LOG_EVENTS:false}
-    name-server: ${ROCKETMQ_NAME_SERVER:}
-    topic-prefix: ${FM_TOPIC_PREFIX:FM_}
+    enabled: false
+    log-events: false
+    name-server: rocketmq-nameserver:9876
+    topic-prefix: FM_
+    producer-group: fm-game
+    send-timeout-ms: 3000
+    diagnostics-on-startup: false
   rpc:
     enabled: ${FM_RPC_ENABLED:false}
     nacos-namespace: ${NACOS_NAMESPACE:fm-prod}

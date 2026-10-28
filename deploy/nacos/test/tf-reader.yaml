@@ -37,11 +37,16 @@ fm:
     base-dir: ${FM_STORAGE_BASE_DIR:/app/data/files}
     max-file-bytes: ${FM_STORAGE_MAX_BYTES:8388608}
   # 消息与 RPC 骨架：默认关闭，不连接任何中间件
+  # RocketMQ：与生产共享 broker，测试统一使用 FM_TEST_ 前缀。
+  # 服务升级到 tf-common 1.2.0 后，把 enabled 改为 true 即接入。
   messaging:
-    enabled: ${FM_MESSAGING_ENABLED:false}
-    log-events: ${FM_MESSAGING_LOG_EVENTS:false}
-    name-server: ${ROCKETMQ_NAME_SERVER:}
-    topic-prefix: ${FM_TOPIC_PREFIX:FM_}
+    enabled: false
+    log-events: false
+    name-server: rocketmq-nameserver:9876
+    topic-prefix: FM_TEST_
+    producer-group: fm-test-reader
+    send-timeout-ms: 3000
+    diagnostics-on-startup: false
   rpc:
     enabled: ${FM_RPC_ENABLED:false}
     nacos-namespace: ${NACOS_NAMESPACE:fm-test}

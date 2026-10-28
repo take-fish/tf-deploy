@@ -1,18 +1,23 @@
 # FishMatrix 独立中间件编排（生产/测试 MySQL 物理隔离）
 #
-# 运行 MySQL / Redis / Elasticsearch / Nacos，以及统一日志组件
+# 运行 MySQL / Redis / Elasticsearch / Nacos / RocketMQ，以及统一日志组件
 # Loki（存储）/ Alloy（采集容器 stdout）/ Grafana（查询界面）。
 # 不包含任何业务应用。
 # MySQL 使用两个独立实例：
 #   - 生产：fm-mysql（mysql），库 fm_*，Redis DB0，Nacos namespace=fm-prod
 #   - 测试：fm-test-mysql（mysql-test），库 fm_test_*，Redis DB1，Nacos namespace=fm-test
-# Redis / Nacos 仍为共享实例，通过 DB / namespace 逻辑隔离。
+# Redis / Nacos / RocketMQ 仍为共享实例：
+#   - Redis 用 DB、Nacos 用 namespace 隔离；
+#   - RocketMQ 用 topic 前缀（生产 FM_ / 测试 FM_TEST_）与 producer group 前缀隔离。
 #
 # 用法（在 tf-deploy 目录）：
 #   docker compose -f docker-compose.middleware.yml up -d mysql mysql-test redis nacos
+#   docker compose -f docker-compose.middleware.yml up -d rocketmq-nameserver rocketmq-broker
 #   docker compose -f docker-compose.middleware.yml up -d loki alloy grafana
 #   docker compose -f docker-compose.middleware.yml ps
 #
+# RocketMQ 只在 fishmatrix-mw 网络内提供服务，不映射宿主机端口；
+# topic 由 scripts/init-rocketmq.sh 预建，管理命令通过 docker exec 执行。
 # Loki / Grafana 仅绑定宿主机回环地址，局域网通过流水线中台的“日志检索”访问。
 # Elasticsearch 已定义但当前未启用；需要时再单独 `up -d elasticsearch`。
 # 数据卷沿用原生产卷（显式 name），切换时不会丢数据；测试实例使用独立数据卷。
@@ -207,6 +212,71 @@ services:
       default:
         aliases: [nacos, fm-nacos]
 
+  # 命名卷首次创建时属主是 root，而 broker 以 UID 3000 运行；
+  # 先把卷根目录属主改为 rocketmq，避免 /home/rocketmq/store 写入被拒。
+  rocketmq-init:
+    image: alpine:latest
+    container_name: fm-rocketmq-init
+    restart: "no"
+    command: ["chown", "3000:3000", "/store"]
+    volumes:
+      - rocketmq-store:/store
+    networks:
+      - default
+
+  rocketmq-nameserver:
+    image: apache/rocketmq:5.3.3
+    container_name: fm-rocketmq-nameserver
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      # 默认 JVM 堆很大，必须显式限制，与生产 MySQL/Redis/Nacos 同机时避免挤占。
+      JAVA_OPT_EXT: -Xms256m -Xmx256m -Xmn128m
+    command: sh mqnamesrv
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9876"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 320m
+    networks:
+      default:
+        aliases: [rocketmq-nameserver, fm-rocketmq-nameserver]
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.3
+    container_name: fm-rocketmq-broker
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_OPT_EXT: -Xms768m -Xmx768m -Xmn256m
+    command: sh mqbroker -c /home/rocketmq/broker.conf
+    volumes:
+      - ./deploy/rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
+      - rocketmq-store:/home/rocketmq/store
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/10911"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+    depends_on:
+      rocketmq-nameserver:
+        condition: service_healthy
+      rocketmq-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    networks:
+      default:
+        aliases: [rocketmq-broker, fm-rocketmq-broker]
+
 volumes:
   mysql-data:
     name: fishmatrix_mysql-data
@@ -224,6 +294,8 @@ volumes:
     name: fishmatrix_alloy-data
   grafana-data:
     name: fishmatrix_grafana-data
+  rocketmq-store:
+    name: fishmatrix_rocketmq-store
 
 networks:
   # 生产/测试应用都接入这张共享中间件网络；应用之间仍使用各自的默认网络

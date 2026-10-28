@@ -26,11 +26,16 @@ fm:
     identity-secret: ${FM_IDENTITY_SECRET:}
     allow-bearer-fallback: ${FM_AUTH_BEARER_FALLBACK:true}
     cache-ttl: ${FM_AUTH_CACHE_TTL:30s}
+  # RocketMQ：与生产共享 broker，测试统一使用 FM_TEST_ 前缀。
+  # tf-game 是首个接入验证载体：启动时发布一条 SYSTEM_PROBE 诊断事件。
   messaging:
-    enabled: ${FM_MESSAGING_ENABLED:false}
-    log-events: ${FM_MESSAGING_LOG_EVENTS:false}
-    name-server: ${ROCKETMQ_NAME_SERVER:}
-    topic-prefix: ${FM_TOPIC_PREFIX:FM_}
+    enabled: true
+    log-events: false
+    name-server: rocketmq-nameserver:9876
+    topic-prefix: FM_TEST_
+    producer-group: fm-test-game
+    send-timeout-ms: 3000
+    diagnostics-on-startup: true
   rpc:
     enabled: ${FM_RPC_ENABLED:false}
     nacos-namespace: ${NACOS_NAMESPACE:fm-test}
