@@ -53,3 +53,9 @@ gateway:
     - id: music
       prefix: /api/v1/music
       service: tf-music
+
+  # Agent：与 vLLM 同机部署在 GPU 笔记本上（10.28.13.214:8201），
+  # Nacos 发现失败时由网关静态兜底表 TF_AGENT_URL 接管
+  - id: agent
+    prefix: /api/v1/agent
+    service: tf-agent
