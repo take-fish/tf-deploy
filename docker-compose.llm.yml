@@ -74,7 +74,7 @@ services:
       FM_LLM_MODEL: ${FM_LLM_MODEL:-qwen2.5-7b-instruct}
       FM_AGENT_MAX_CONCURRENCY: ${FM_AGENT_MAX_CONCURRENCY:-2}
       FM_AGENT_TIMEOUT_SECONDS: ${FM_AGENT_TIMEOUT_SECONDS:-120}
-      # 审计库在集中机（.112）的 MySQL
+      # 审计库在集中机（.112）的 MySQL：业务连接只用 fm_agent_app（仅 DML）
       FM_AGENT_MYSQL_DSN: ${FM_AGENT_MYSQL_DSN:-}
       # 数据源（集中机）
       LOKI_URL: ${LOKI_URL:-http://10.28.13.112:3100}
@@ -106,6 +106,21 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    networks:
+      - fm
+
+  # 一次性迁移任务：建表/改表用 fm_agent_migrate，跑完退出。
+  #   docker compose -f docker-compose.llm.yml --profile migrate run --rm migrate
+  # 业务容器（agent）只有 DML 权限，所以升级后必须先跑这个再重启 agent。
+  migrate:
+    image: ghcr.io/take-fish/tf-agent:${TF_AGENT_TAG:-latest}
+    container_name: fm-agent-migrate
+    profiles: ["migrate"]
+    restart: "no"
+    environment:
+      FM_AGENT_MIGRATE_DSN: ${FM_AGENT_MIGRATE_DSN:-}
+      TZ: Asia/Shanghai
+    command: ["uv", "run", "--no-dev", "python", "-m", "app.migrate"]
     networks:
       - fm
 
