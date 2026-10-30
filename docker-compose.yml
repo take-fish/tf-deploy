@@ -33,6 +33,8 @@ services:
       TF_GAME_URL: ${TF_GAME_URL:-http://fm-game:8104}
       TF_MUSIC_URL: ${TF_MUSIC_URL:-http://fm-music:8105}
       TF_USER_URL: ${TF_USER_URL:-http://fm-prod-user:8101}
+      # Agent 不在集中机：它和 vLLM 一起跑在 GPU 笔记本上（见部署方案 §4）
+      TF_AGENT_URL: ${TF_AGENT_URL:-http://10.28.13.214:8201}
       # 与生产业务服务共享同一 HMAC 密钥，用于注入签名身份头
       FM_IDENTITY_SECRET: ${FM_IDENTITY_SECRET:-}
     ports:

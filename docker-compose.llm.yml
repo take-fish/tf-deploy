@@ -1,0 +1,146 @@
+# GPU 节点编排：vLLM + tf-agent + Qdrant，全部跑在笔记本（10.28.13.214）
+# 用法：docker compose -f docker-compose.llm.yml --env-file .env up -d
+#
+# 与集中机的关系：本文件不接业务网络，只对外暴露 8201（agent），
+# 且由 Windows 防火墙限制只有 10.28.13.112 能访问（见部署方案 §5.8）。
+name: fishmatrix-llm
+
+services:
+  llm:
+    # 本机驱动 572.83 = CUDA 12.8：只能用 CUDA 12.8 构建的 tag。
+    # latest(13.0) 会报 "unsatisfied condition: cuda>=13.0" 起不来。
+    image: vllm/vllm-openai:${VLLM_TAG:-v0.10.2}
+    container_name: fm-llm
+    restart: unless-stopped
+    ipc: host
+    shm_size: "8gb"
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      VLLM_LOGGING_LEVEL: INFO
+    volumes:
+      - ./models:/models:ro
+    command:
+      - --model=/models/${MODEL_DIR:-Qwen2.5-7B-Instruct-AWQ}
+      - --served-model-name=${MODEL_NAME:-qwen2.5-7b-instruct}
+      - --host=0.0.0.0
+      - --port=8000
+      # 配置 A'：2.5-7B + FP16 KV + 8192 上下文
+      # 禁止 --kv-cache-dtype=fp8：v0.10.2 的 V1 引擎不支持，会降级到 V0 + XFormers
+      # 并用未校准的 scale(1.0) 把输出打成乱码（工具调用直接坏掉）。
+      - --max-model-len=${MAX_LEN:-8192}
+      - --gpu-memory-utilization=${GPU_UTIL:-0.86}
+      - --max-num-seqs=${MAX_SEQS:-2}
+      - --max-num-batched-tokens=${MAX_BATCHED_TOKENS:-2048}
+      - --kv-cache-dtype=${KV_CACHE_DTYPE:-auto}
+      - --enable-prefix-caching
+      # 工具调用必需；Qwen 系列用 hermes 解析器
+      - --enable-auto-tool-choice
+      - --tool-call-parser=hermes
+      - --api-key=${FM_LLM_API_KEY:?FM_LLM_API_KEY 未配置}
+    ports:
+      # 仅回环：只有本机的 agent 容器访问
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # 模型加载 + CUDA graph 编译需要几分钟
+      start_period: 600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - fm
+
+  agent:
+    image: ghcr.io/take-fish/tf-agent:${TF_AGENT_TAG:-latest}
+    container_name: fm-agent
+    restart: unless-stopped
+    environment:
+      # 模型走同一 compose 网络的服务名，不依赖宿主机回环
+      FM_LLM_BASE_URL: ${FM_LLM_BASE_URL:-http://fm-llm:8000/v1}
+      FM_LLM_API_KEY: ${FM_LLM_API_KEY:-}
+      FM_LLM_MODEL: ${FM_LLM_MODEL:-qwen2.5-7b-instruct}
+      FM_AGENT_MAX_CONCURRENCY: ${FM_AGENT_MAX_CONCURRENCY:-2}
+      FM_AGENT_TIMEOUT_SECONDS: ${FM_AGENT_TIMEOUT_SECONDS:-120}
+      # 审计库在集中机（.112）的 MySQL：业务连接只用 fm_agent_app（仅 DML）
+      FM_AGENT_MYSQL_DSN: ${FM_AGENT_MYSQL_DSN:-}
+      # 数据源（集中机）
+      LOKI_URL: ${LOKI_URL:-http://10.28.13.112:3100}
+      NACOS_URL: ${NACOS_URL:-http://10.28.13.112:8848}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-fm-prod}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # 网关签名密钥：校验 X-FM-* 头，必须与网关一致
+      FM_IDENTITY_SECRET: ${FM_IDENTITY_SECRET:-}
+      # 向量库（本机 compose 内）
+      QDRANT_URL: ${QDRANT_URL:-http://fm-qdrant:6333}
+      FM_EMBED_MODEL_PATH: ${FM_EMBED_MODEL_PATH:-/models/bge-base-zh-v1.5}
+      FM_EMBED_DIM: ${FM_EMBED_DIM:-768}
+      TZ: Asia/Shanghai
+    volumes:
+      # 嵌入模型与 vLLM 共用挂载目录（CPU 推理，不占显存）
+      - ./models:/models:ro
+      - ./data/uploads:/app/data/uploads
+    ports:
+      # 发布到宿主，由防火墙限源 IP（唯一对外端口）
+      - "8201:8201"
+    depends_on:
+      llm:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8201/healthz')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - fm
+
+  # 一次性迁移任务：建表/改表用 fm_agent_migrate，跑完退出。
+  #   docker compose -f docker-compose.llm.yml --profile migrate run --rm migrate
+  # 业务容器（agent）只有 DML 权限，所以升级后必须先跑这个再重启 agent。
+  migrate:
+    image: ghcr.io/take-fish/tf-agent:${TF_AGENT_TAG:-latest}
+    container_name: fm-agent-migrate
+    profiles: ["migrate"]
+    restart: "no"
+    environment:
+      FM_AGENT_MIGRATE_DSN: ${FM_AGENT_MIGRATE_DSN:-}
+      TZ: Asia/Shanghai
+    command: ["uv", "run", "--no-dev", "python", "-m", "app.migrate"]
+    networks:
+      - fm
+
+  qdrant:
+    image: qdrant/qdrant:${QDRANT_TAG:-latest}
+    container_name: fm-qdrant
+    restart: unless-stopped
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    ports:
+      # 只给本机 agent 用，不对外
+      - "127.0.0.1:6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - fm
+
+networks:
+  fm:
+    driver: bridge

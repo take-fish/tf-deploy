@@ -55,6 +55,12 @@ FM_MUSIC_DB_PASSWORD="${FM_MUSIC_DB_PASSWORD:-}"
 FM_MUSIC_DB_MIGRATE_USER="${FM_MUSIC_DB_MIGRATE_USER:-fm_music_migrate}"
 FM_MUSIC_DB_MIGRATE_PASSWORD="${FM_MUSIC_DB_MIGRATE_PASSWORD:-}"
 
+# tf-agent：审计 + 知识库元数据；建表由 `python -m app.migrate` 用迁移账号执行
+FM_AGENT_DB_USER="${FM_AGENT_DB_USER:-fm_agent_app}"
+FM_AGENT_DB_PASSWORD="${FM_AGENT_DB_PASSWORD:-}"
+FM_AGENT_DB_MIGRATE_USER="${FM_AGENT_DB_MIGRATE_USER:-fm_agent_migrate}"
+FM_AGENT_DB_MIGRATE_PASSWORD="${FM_AGENT_DB_MIGRATE_PASSWORD:-}"
+
 log() { echo "[init-db] $*"; }
 
 validate_identifier() {
@@ -87,7 +93,9 @@ for pair in \
   "FM_GAME_DB_USER:$FM_GAME_DB_USER" \
   "FM_GAME_DB_MIGRATE_USER:$FM_GAME_DB_MIGRATE_USER" \
   "FM_MUSIC_DB_USER:$FM_MUSIC_DB_USER" \
-  "FM_MUSIC_DB_MIGRATE_USER:$FM_MUSIC_DB_MIGRATE_USER"; do
+  "FM_MUSIC_DB_MIGRATE_USER:$FM_MUSIC_DB_MIGRATE_USER" \
+  "FM_AGENT_DB_USER:$FM_AGENT_DB_USER" \
+  "FM_AGENT_DB_MIGRATE_USER:$FM_AGENT_DB_MIGRATE_USER"; do
   validate_identifier "${pair%%:*}" "${pair#*:}"
 done
 
@@ -101,7 +109,9 @@ for pair in \
   "FM_GAME_DB_PASSWORD:$FM_GAME_DB_PASSWORD" \
   "FM_GAME_DB_MIGRATE_PASSWORD:$FM_GAME_DB_MIGRATE_PASSWORD" \
   "FM_MUSIC_DB_PASSWORD:$FM_MUSIC_DB_PASSWORD" \
-  "FM_MUSIC_DB_MIGRATE_PASSWORD:$FM_MUSIC_DB_MIGRATE_PASSWORD"; do
+  "FM_MUSIC_DB_MIGRATE_PASSWORD:$FM_MUSIC_DB_MIGRATE_PASSWORD" \
+  "FM_AGENT_DB_PASSWORD:$FM_AGENT_DB_PASSWORD" \
+  "FM_AGENT_DB_MIGRATE_PASSWORD:$FM_AGENT_DB_MIGRATE_PASSWORD"; do
   validate_password "${pair%%:*}" "${pair#*:}"
 done
 
@@ -172,6 +182,9 @@ create_database_and_accounts game fm_game \
 create_database_and_accounts music fm_music \
   "$FM_MUSIC_DB_USER" "$FM_MUSIC_DB_PASSWORD" \
   "$FM_MUSIC_DB_MIGRATE_USER" "$FM_MUSIC_DB_MIGRATE_PASSWORD"
+create_database_and_accounts agent fm_agent \
+  "$FM_AGENT_DB_USER" "$FM_AGENT_DB_PASSWORD" \
+  "$FM_AGENT_DB_MIGRATE_USER" "$FM_AGENT_DB_MIGRATE_PASSWORD"
 
 log "完成：生产每服务运行时账号只授 DML，迁移账号只授本库 DDL。"
 log "旧账号 ${MYSQL_APP_USER:-fm_app} 未做任何撤销，保留用于回滚；确认无引用后再执行退场。"

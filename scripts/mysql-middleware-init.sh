@@ -12,7 +12,7 @@ set -eu
 
 log() { echo "[fm-middleware-init] $*"; }
 
-prod_dbs="fm_user fm_chat fm_reader fm_game fm_music"
+prod_dbs="fm_user fm_chat fm_reader fm_game fm_music fm_agent"
 
 for db in $prod_dbs; do
   echo "CREATE DATABASE IF NOT EXISTS \`${db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
