@@ -1,8 +1,8 @@
 # tf-agent 场景与限流配置（dataId=tf-agent.yaml, group=FM, namespace=fm-test）
 #
-# 注意：tf-agent 是 Python 服务，**不会**像 Java 服务那样自动拉取本配置。
-# 当前版本（P1）全部参数走环境变量，本文件先作为配置口径与后续接入的落点：
-# 接入方式见 app/config.py 的 Settings，字段名与本文件一一对应。
+# 生效方式：tf-agent 启动时拉取一次，之后每 NACOS_REFRESH_SECONDS（默认 60s）轮询，
+# 改完保存即热更新，不需要重启容器；拉不到就回落代码里的默认场景与限流，服务照常可用。
+# 只覆盖这里写出的字段：某场景没写就整体沿用同名内置场景，避免配一半丢能力。
 version: 1
 
 agent:
