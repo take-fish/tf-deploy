@@ -1,4 +1,4 @@
-# GPU 节点编排：vLLM + tf-agent + Qdrant，全部跑在笔记本（10.28.13.214）
+# GPU 节点编排：vLLM + tf-agent，全部跑在笔记本（10.28.13.214）；向量库在集中机 ES
 # 用法：docker compose -f docker-compose.llm.yml --env-file .env up -d
 #
 # 与集中机的关系：本文件不接业务网络，只对外暴露 8201（agent），
@@ -83,11 +83,10 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # 网关签名密钥：校验 X-FM-* 头，必须与网关一致
       FM_IDENTITY_SECRET: ${FM_IDENTITY_SECRET:-}
-      # 向量库：默认 Qdrant（同 compose 内）；切 ES 时把 FM_KB_BACKEND 设为 es，
-      # ES 跑在集中机（.112）的 middleware compose 里，agent 只走 HTTP。
-      FM_KB_BACKEND: ${FM_KB_BACKEND:-qdrant}
+      # 向量库：Elasticsearch（跑在集中机 .112 的 middleware compose 里，agent 只走 HTTP）；
+      # Qdrant 已下线，容器与镜像都已删除。
+      FM_KB_BACKEND: ${FM_KB_BACKEND:-es}
       FM_KB_HYBRID: ${FM_KB_HYBRID:-true}
-      QDRANT_URL: ${QDRANT_URL:-http://fm-qdrant:6333}
       FM_KB_ES_URL: ${FM_KB_ES_URL:-http://10.28.13.112:9200}
       FM_KB_ES_INDEX: ${FM_KB_ES_INDEX:-fm_kb}
       FM_EMBED_MODEL_PATH: ${FM_EMBED_MODEL_PATH:-/models/bge-base-zh-v1.5}
@@ -103,8 +102,6 @@ services:
     depends_on:
       llm:
         condition: service_healthy
-      qdrant:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8201/healthz')\""]
       interval: 15s
@@ -153,10 +150,9 @@ services:
       LOKI_URL: ${LOKI_URL:-http://10.28.13.112:3100}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       FM_IDENTITY_SECRET: ${TEST_FM_IDENTITY_SECRET:-}
-      # 测试实例默认也走 Qdrant；切 ES 时索引名用 fm_kb_test，避免和生产串库
-      FM_KB_BACKEND: ${FM_TEST_KB_BACKEND:-qdrant}
+      # 测试实例默认也走集中机 ES；索引名 fm_kb_test，避免和生产串库
+      FM_KB_BACKEND: ${FM_TEST_KB_BACKEND:-es}
       FM_KB_HYBRID: ${FM_KB_HYBRID:-true}
-      QDRANT_URL: ${QDRANT_URL:-http://fm-qdrant:6333}
       FM_KB_ES_URL: ${FM_KB_ES_URL:-http://10.28.13.112:9200}
       FM_KB_ES_INDEX: ${FM_TEST_KB_ES_INDEX:-fm_kb_test}
       FM_EMBED_MODEL_PATH: ${FM_EMBED_MODEL_PATH:-/models/bge-base-zh-v1.5}
@@ -170,25 +166,6 @@ services:
     depends_on:
       llm:
         condition: service_healthy
-      qdrant:
-        condition: service_started
-    networks:
-      - fm
-
-  qdrant:
-    image: qdrant/qdrant:${QDRANT_TAG:-latest}
-    container_name: fm-qdrant
-    restart: unless-stopped
-    volumes:
-      - ./data/qdrant:/qdrant/storage
-    ports:
-      # 只给本机 agent 用，不对外
-      - "127.0.0.1:6333:6333"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
     networks:
       - fm
 
