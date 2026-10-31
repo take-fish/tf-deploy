@@ -124,6 +124,47 @@ services:
     networks:
       - fm
 
+  # 测试实例：与生产共用同一个 vLLM，只隔离配置、队列和审计（并发压到 1 路，
+  # 避免测试联调把生产的 1-2 路 GPU 并发占满）。默认不启动：
+  #   docker compose -f docker-compose.llm.yml --profile test up -d agent-test
+  agent-test:
+    image: ghcr.io/take-fish/tf-agent:${TF_AGENT_TAG:-latest}
+    container_name: fm-agent-test
+    profiles: ["test"]
+    restart: unless-stopped
+    environment:
+      FM_LLM_BASE_URL: ${FM_LLM_BASE_URL:-http://fm-llm:8000/v1}
+      FM_LLM_API_KEY: ${FM_LLM_API_KEY:-}
+      FM_LLM_MODEL: ${FM_LLM_MODEL:-qwen2.5-7b-instruct}
+      FM_AGENT_MAX_CONCURRENCY: ${FM_TEST_AGENT_MAX_CONCURRENCY:-1}
+      FM_AGENT_TIMEOUT_SECONDS: ${FM_AGENT_TIMEOUT_SECONDS:-120}
+      # 测试库与测试命名空间：与生产完全隔离
+      FM_AGENT_MYSQL_DSN: ${FM_TEST_AGENT_MYSQL_DSN:-}
+      NACOS_URL: ${NACOS_URL:-http://10.28.13.112:8848}
+      NACOS_NAMESPACE: ${TEST_NACOS_NAMESPACE:-fm-test}
+      # 注册到 Nacos 的端口要和映射到宿主的一致（8202），网关才能发现
+      FM_AGENT_PORT: "8202"
+      NACOS_INSTANCE_IP: ${NACOS_INSTANCE_IP:-}
+      LOKI_URL: ${LOKI_URL:-http://10.28.13.112:3100}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      FM_IDENTITY_SECRET: ${TEST_FM_IDENTITY_SECRET:-}
+      QDRANT_URL: ${QDRANT_URL:-http://fm-qdrant:6333}
+      FM_EMBED_MODEL_PATH: ${FM_EMBED_MODEL_PATH:-/models/bge-base-zh-v1.5}
+      FM_EMBED_DIM: ${FM_EMBED_DIM:-768}
+      TZ: Asia/Shanghai
+    volumes:
+      - ./models:/models:ro
+      - ./data/uploads:/app/data/uploads
+    ports:
+      - "8202:8201"
+    depends_on:
+      llm:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - fm
+
   qdrant:
     image: qdrant/qdrant:${QDRANT_TAG:-latest}
     container_name: fm-qdrant
