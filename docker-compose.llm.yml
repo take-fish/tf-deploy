@@ -80,6 +80,9 @@ services:
       LOKI_URL: ${LOKI_URL:-http://10.28.13.112:3100}
       NACOS_URL: ${NACOS_URL:-http://10.28.13.112:8848}
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-fm-prod}
+      # 注册给 Nacos 的地址必须是宿主机可达的 IP，否则网关只能拿到容器网段 172.x 地址
+      NACOS_INSTANCE_IP: ${NACOS_INSTANCE_IP:-10.28.13.214}
+      FM_AGENT_PORT: ${FM_AGENT_PORT:-8201}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # 网关签名密钥：校验 X-FM-* 头，必须与网关一致
       FM_IDENTITY_SECRET: ${FM_IDENTITY_SECRET:-}
