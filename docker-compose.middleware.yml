@@ -1,6 +1,6 @@
 # FishMatrix 独立中间件编排（生产/测试 MySQL 物理隔离）
 #
-# 运行 MySQL / Redis / Elasticsearch / Nacos / RocketMQ，以及统一日志组件
+# 运行 MySQL / Redis / Nacos / RocketMQ，以及统一日志组件
 # Loki（存储）/ Alloy（采集容器 stdout）/ Grafana（查询界面）。
 # 不包含任何业务应用。
 # MySQL 使用两个独立实例：
@@ -19,7 +19,7 @@
 # RocketMQ 只在 fishmatrix-mw 网络内提供服务，不映射宿主机端口；
 # topic 由 scripts/init-rocketmq.sh 预建，管理命令通过 docker exec 执行。
 # Loki / Grafana 仅绑定宿主机回环地址，局域网通过流水线中台的“日志检索”访问。
-# Elasticsearch 已定义但当前未启用；需要时再单独 `up -d elasticsearch`。
+# Elasticsearch 已迁到集中机 .112（agent 通过 FM_KB_ES_URL=http://10.28.13.112:9200 访问），本文件不再定义 ES。
 # 数据卷沿用原生产卷（显式 name），切换时不会丢数据；测试实例使用独立数据卷。
 name: fishmatrix-middleware
 
@@ -169,23 +169,6 @@ services:
       default:
         aliases: [grafana, fm-grafana]
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
-    container_name: fm-es
-    restart: unless-stopped
-    environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
-      TZ: Asia/Shanghai
-    ports:
-      - "${ES_PORT:-9200}:9200"
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-    networks:
-      default:
-        aliases: [elasticsearch, fm-es]
-
   nacos:
     image: nacos/nacos-server:v2.5.1
     container_name: fm-nacos
@@ -287,8 +270,6 @@ volumes:
     name: fishmatrix_test-mysql-data
   redis-data:
     name: fishmatrix_redis-data
-  es-data:
-    name: fishmatrix_es-data
   nacos-data:
     name: fishmatrix_nacos-data
   loki-data:
