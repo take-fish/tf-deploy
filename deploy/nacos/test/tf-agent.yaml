@@ -49,14 +49,14 @@ agent:
     queue-limit: 4
     rate-limit-per-minute: 10
 
-  # 知识库
+  # 知识库（以下参数 60s 内热更新；嵌入模型/维度是启动期 env：
+  # FM_EMBED_MODEL / FM_EMBED_DIM，在这里改无效）
   knowledge-base:
-    embedding-model: BAAI/bge-base-zh-v1.5
-    dim: 768
     chunk-size: 500
     chunk-overlap: 80
     top-k: 8
     max-chunks-in-context: 5
+    chunk-chars: 300
 
   # 写操作只允许管理台确认
   write-operations:

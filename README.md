@@ -2,7 +2,7 @@
 
 FishMatrix（摸鱼矩阵）部署编排与聚合壳仓库。
 
-- **中间件编排**：`docker-compose.middleware.yml` 单独拉起 MySQL / Redis / Elasticsearch / Nacos，生产与测试共用一套中间件地址
+- **中间件编排**：`docker-compose.middleware.yml` 单独拉起 MySQL / Redis / Elasticsearch / Nacos，生产与测试共用一套中间件地址；Elasticsearch 已迁到集中机 .112
 - **集中机编排**：`docker-compose.yml` 拉起网关 + Web 前端 + 流水线控制台
 - **业务服务编排**：`docker-compose.services.yml` 拉起 user / chat / reader / game / music（与公共层共用 network）
 - **测试环境编排**：`docker-compose.test.yml` 只拉起测试应用，连接共享中间件的 `fm_test_*` 库 / Redis DB1 / Nacos `fm-test`（见 `docs/测试环境说明.md`）
