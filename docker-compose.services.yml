@@ -81,7 +81,8 @@ services:
       MYSQL_DB: fm_chat
       MYSQL_APP_USER: ${FM_CHAT_DB_USER:-fm_chat_app}
       MYSQL_APP_PASSWORD: ${FM_CHAT_DB_PASSWORD:-}
-      # 聊天接入智能助手：@ 展示名 触发。agent 与 vLLM 同机部署在 GPU 笔记本上
+      # 聊天接入智能助手：@ 展示名 触发，回答走 SSE 转成普通聊天事件。
+      # 身份头用的 FM_IDENTITY_SECRET 必须和 agent 容器一致，否则 chat-identity 401。
       TF_AGENT_URL: ${TF_AGENT_URL:-http://10.28.13.214:8201}
       CHAT_AGENT_ENABLED: ${CHAT_AGENT_ENABLED:-true}
       CHAT_AGENT_ENV: ${CHAT_AGENT_ENV:-prod}
