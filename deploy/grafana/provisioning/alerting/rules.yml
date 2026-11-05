@@ -1,0 +1,132 @@
+apiVersion: 1
+
+# Grafana 统一告警（Loki 数据源）：
+#   - tf-agent 5xx 比例/数量
+#   - tf-agent 业务错误激增（按错误码聚合时用 Loki 查询面板看）
+#   - 网关 5xx
+#
+# 接收端：默认 webhook 占位，部署时把 GRAFANA_ALERT_WEBHOOK 换成钉钉/企业微信/飞书
+# 的机器人地址即可（钉钉需要 ?access_token=xxx）。没配就指向本机 noop，不会报错。
+
+contactPoints:
+  - orgId: 1
+    name: fishmatrix
+    receivers:
+      - uid: fm-alert-webhook
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://127.0.0.1:9/fishmatrix-alert
+          httpMethod: POST
+          maxAlerts: 10
+
+groups:
+  - orgId: 1
+    name: fishmatrix-agent
+    folder: FishMatrix
+    interval: 1m
+    rules:
+      - uid: fm-agent-5xx
+        title: tf-agent 5xx 激增
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: fm-loki
+            model:
+              expr: 'sum(count_over_time({container=~"fm-agent.*"} |= "event=agent.error" |= "status=5" [5m]))'
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [3]
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+        labels:
+          service: tf-agent
+          severity: warning
+        annotations:
+          summary: tf-agent 5 分钟内出现超过 3 次 5xx
+          description: 用 Loki 查 `{container=~"fm-agent.*"} |= "event=agent.error" |= "status=5"`，按 trace_id 找对应请求。
+
+      - uid: fm-agent-error-spike
+        title: tf-agent 错误响应激增
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: fm-loki
+            model:
+              expr: 'sum(count_over_time({container=~"fm-agent.*"} |= "event=agent.error" [5m]))'
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [20]
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+        labels:
+          service: tf-agent
+          severity: warning
+        annotations:
+          summary: tf-agent 5 分钟内错误响应超过 20 次
+          description: 按 code 分组看：`sum by (code) (count_over_time(...))`（需 `| logfmt` 解析）。
+
+      - uid: fm-gateway-5xx
+        title: 网关 5xx 激增
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: fm-loki
+            model:
+              expr: 'sum(count_over_time({container=~"fm-gateway.*"} |= "status=5" [5m]))'
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [5]
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+        labels:
+          service: tf-gateway
+          severity: critical
+        annotations:
+          summary: 网关 5 分钟内出现超过 5 次 5xx
+          description: 检查上游实例健康与 Nacos 注册状态。
